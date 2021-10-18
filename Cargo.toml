@@ -1,0 +1,13 @@
+[package]
+name = "hurricane_rs"
+version = "0.1.0"
+authors = ["Cole Poirier <colepoirier@gmail.com>"]
+edition = "2018"
+
+
+[dependencies]
+num-traits = "0.2.14"
+anyhow = "1.0.43"
+bevy = { version = "0.5.0", features = ["dynamic"] }
+derive_more = "0.99.16"
+bevy_prototype_lyon = "0.3.1"
