@@ -117,28 +117,29 @@ pub const ALPHA: f32 = 0.25;
 //   }
 // }
 
+#[derive(Debug, Clone)]
 pub struct Layer;
 
+#[derive(Debug, Clone)]
 pub struct InLayer(Entity);
 
+#[derive(Debug, Clone)]
 pub struct Path {
     layer: InLayer,
     width: u64,
 }
 
-#[derive(Debug, Clone, Deref, DerefMut)]
+#[derive(Debug, Default, Clone, Deref, DerefMut)]
 pub struct LayerMap(pub HashMap<Name, Entity>);
 
 impl Path {
     pub fn spawn(
-        mut commands: &mut Commands,
+        commands: &mut Commands,
         color_query: &Query<&Color, With<Layer>>,
-        layers: Res<LayerMap>,
-        layer: Name,
+        layer: Entity,
         width: f32,
         points: &[Vec2],
     ) {
-        let layer = *layers.get(&layer).unwrap();
         let color = color_query.get(layer).unwrap();
 
         let mut path = PathBuilder::new();

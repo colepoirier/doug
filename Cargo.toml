@@ -1,5 +1,5 @@
 [package]
-name = "hurricane_rs"
+name = "doug"
 version = "0.1.0"
 authors = ["Cole Poirier <colepoirier@gmail.com>"]
 edition = "2018"
