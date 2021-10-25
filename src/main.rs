@@ -63,7 +63,7 @@ pub struct DrawShapeEvent {
 pub struct LoadProtoEvent;
 
 fn main() {
-    App::build()
+    App::new()
         .add_event::<LoadProtoEvent>()
         .insert_resource(Msaa { samples: 8 })
         .insert_resource(LayerColors::default())
@@ -71,8 +71,8 @@ fn main() {
         .add_plugin(ShapePlugin)
         .init_resource::<EventTriggerState>()
         .add_system(event_trigger_system.system())
-        .add_system(load_proto_event_listener_system.system())
         .add_startup_system(setup.system())
+        .add_system(load_proto_event_listener_system.system())
         .run();
 }
 
@@ -83,7 +83,7 @@ struct EventTriggerState {
 impl Default for EventTriggerState {
     fn default() -> Self {
         EventTriggerState {
-            event_timer: Timer::from_seconds(1.0, true),
+            event_timer: Timer::from_seconds(0.001, true),
         }
     }
 }
@@ -106,7 +106,7 @@ fn event_trigger_system(
 fn draw_shape_event_listener_system(
     mut events: EventReader<DrawShapeEvent>,
     mut commands: Commands,
-    color_query: Query<(&LayerNum, &Color), With<Layer>>,
+    // color_query: Query<(&LayerNum, &Color), With<Layer>>,
 ) {
     for draw_shape_event in events.iter() {
         // test_spawn_path(&mut commands, &color_query);
@@ -122,7 +122,7 @@ fn load_proto_event_listener_system(
     mut events: EventReader<LoadProtoEvent>,
     mut commands: Commands,
     mut layer_colors: ResMut<LayerColors>,
-    color_query: Query<(&LayerNum, &Color), With<Layer>>,
+    // color_query: Query<(&LayerNum, &Color), With<Layer>>,
 ) {
     for _ in events.iter() {
         import::test_load_proto_lib(&mut commands, &mut layer_colors)
@@ -130,15 +130,18 @@ fn load_proto_event_listener_system(
 }
 
 fn setup(mut commands: Commands) {
-    let mut transform = Transform::from_translation(Vec3::new(0.0, 0.0, 300.0))
-        .looking_at(Vec3::default(), Vec3::Y);
-    transform.scale = Vec3::new(500.0, 500.0, 0.0);
+    // let mut transform = Transform::from_xyz(0.0, 0.0, 1_000.0).looking_at(Vec3::default(), Vec3::Y);
+    // transform.apply_non_uniform_scale(Vec3::new(8.0, 8.0, 1_000.0));
 
-    commands.spawn_bundle(OrthographicCameraBundle {
-        transform,
-        orthographic_projection: bevy::render::camera::OrthographicProjection::default(),
-        ..OrthographicCameraBundle::new_2d()
-    });
+    let mut camera = OrthographicCameraBundle::new_2d();
+
+    camera.orthographic_projection.scale = 10.0;
+    camera.transform = Transform::from_xyz(0.0, 0.0, 1_000.0).looking_at(Vec3::default(), Vec3::Y);
+
+    // let direction = camera.transform.local_z();
+    // camera.transform.translation = direction * 1.0;
+    println!("{:?}", camera.transform);
+    commands.spawn_bundle(camera);
 }
 
 // fn test_spawn_path(commands: &mut Commands, color_query: &Query<(&LayerNum, &Color), With<Layer>>) {

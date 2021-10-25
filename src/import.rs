@@ -1,4 +1,4 @@
-use crate::geom::{InLayer, LayerBundle, LayerNum};
+use crate::geom::{InLayer, LayerBundle, LayerColor, LayerNum};
 use crate::LayerColors;
 use bevy::prelude::*;
 use bevy_prototype_lyon::entity::ShapeBundle;
@@ -15,11 +15,10 @@ use std::collections::HashMap;
 
 use bevy_prototype_lyon::path::PathBuilder;
 use bevy_prototype_lyon::prelude::{
-    DrawMode, FillOptions, Geometry, GeometryBuilder, ShapeColors, StrokeOptions,
+    DrawMode, FillMode, FillOptions, Geometry, GeometryBuilder, StrokeMode, StrokeOptions,
 };
 use bevy_prototype_lyon::shapes;
 use bevy_prototype_lyon::shapes::RectangleOrigin;
-use lyon_path;
 
 #[derive(Bundle)]
 pub struct Rect {
@@ -55,18 +54,18 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
         .collect::<Vec<i64>>();
 
     layers.sort();
-    println!("{}", layers.len());
+    // println!("{}", layers.len());
 
     layers.dedup();
-    println!("{}", layers.len());
-    println!("{:?}", layers);
+    // println!("{}", layers.len());
+    // println!("{:?}", layers);
 
     let layers = layers
         .iter()
         .map(|&num| (num, layer_colors.get_color()))
         .collect::<Vec<(i64, Color)>>();
 
-    println!("{:?}", layers);
+    // println!("{:?}", layers);
 
     let mut layer_map = HashMap::<u16, (Entity, Color)>::new();
 
@@ -74,7 +73,7 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
         let id = commands
             .spawn_bundle(LayerBundle {
                 num: LayerNum(num as u16),
-                color,
+                color: LayerColor(color),
                 ..Default::default()
             })
             .id();
@@ -93,6 +92,8 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
         .unwrap()
         .shapes
         .iter()
+        // .rev()
+        // .take(10)
         .for_each(|layer_shapes| {
             let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
             let (layer_entity, color) = layer_map.get(&layer).unwrap();
@@ -120,24 +121,27 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
 
                         let rect = shapes::Rectangle {
                             origin: RectangleOrigin::BottomLeft,
-                            width: width as f32,
-                            height: height as f32,
+                            extents: Vec2::new(width as f32, height as f32),
                         };
-
+                        // println!("{:?}", rect);
                         let transform = Transform::from_translation(Vec3::new(
                             x as f32,
                             y as f32,
                             layer as f32,
                         ));
-
+                        // println!("{:?}", transform);
                         Rect {
                             rect: GeometryBuilder::build_as(
                                 &rect,
-                                ShapeColors::outlined(*color.clone().set_a(ALPHA), color),
                                 DrawMode::Outlined {
-                                    fill_options: FillOptions::default(),
-                                    outline_options: StrokeOptions::default()
-                                        .with_line_width(width as f32),
+                                    fill_mode: FillMode {
+                                        color: *color.clone().set_a(0.25),
+                                        options: FillOptions::default(),
+                                    },
+                                    outline_mode: StrokeMode {
+                                        options: StrokeOptions::default().with_line_width(10.0),
+                                        color: color,
+                                    },
                                 },
                                 transform,
                             ),
@@ -172,10 +176,15 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                     Poly {
                         poly: GeometryBuilder::build_as(
                             &poly,
-                            ShapeColors::outlined(*color.clone().set_a(ALPHA), color),
                             DrawMode::Outlined {
-                                fill_options: FillOptions::default(),
-                                outline_options: StrokeOptions::default(),
+                                fill_mode: FillMode {
+                                    color: *color.clone().set_a(0.25),
+                                    options: FillOptions::default(),
+                                },
+                                outline_mode: StrokeMode {
+                                    options: StrokeOptions::default().with_line_width(10.0),
+                                    color: color,
+                                },
                             },
                             transform,
                         ),
@@ -184,63 +193,74 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                 })
                 .collect::<Vec<Poly>>();
 
-            let paths = layer_shapes
-                .paths
-                .iter()
-                .map(|proto::Path { points, width, .. }| {
-                    for p in points {
-                        x_min = std::cmp::min(x_min, p.x);
-                        x_max = std::cmp::max(x_max, p.x);
-                        y_min = std::cmp::min(y_min, p.y);
-                        y_max = std::cmp::max(y_max, p.y);
-                    }
-                    let points = points
-                        .iter()
-                        .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
-                        .collect::<Vec<Vec2>>();
-                    let mut path = PathBuilder::new();
-                    path.move_to(points[0]);
+            // let paths = layer_shapes
+            //     .paths
+            //     .iter()
+            //     .map(|proto::Path { points, width, .. }| {
+            //         for p in points {
+            //             x_min = std::cmp::min(x_min, p.x);
+            //             x_max = std::cmp::max(x_max, p.x);
+            //             y_min = std::cmp::min(y_min, p.y);
+            //             y_max = std::cmp::max(y_max, p.y);
+            //         }
+            //         let points = points
+            //             .iter()
+            //             .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
+            //             .collect::<Vec<Vec2>>();
+            //         let mut path = PathBuilder::new();
+            //         path.move_to(points[0]);
 
-                    (&points[1..]).iter().for_each(|p| {
-                        path.line_to(*p);
-                    });
-                    path.close();
-                    let path = path.build();
+            //         (&points[1..]).iter().for_each(|p| {
+            //             path.line_to(*p);
+            //         });
+            //         path.close();
+            //         let path = path.build();
 
-                    let transform = Transform::from_translation(Vec3::new(0.0, 0.0, layer as f32));
+            //         let transform = Transform::from_translation(Vec3::new(0.0, 0.0, layer as f32));
 
-                    Path {
-                        path: GeometryBuilder::build_as(
-                            &path,
-                            ShapeColors::outlined(*color.clone().set_a(ALPHA), color),
-                            DrawMode::Outlined {
-                                fill_options: FillOptions::default(),
-                                outline_options: StrokeOptions::default()
-                                    .with_line_width(*width as f32),
-                            },
-                            transform,
-                        ),
-                        layer: InLayer(layer_entity),
-                    }
-                })
-                .collect::<Vec<Path>>();
+            //         Path {
+            //             path: GeometryBuilder::build_as(
+            //                 &path,
+            //                 // ShapeColors::outlined(*color.clone().set_a(ALPHA), color),
+            //                 DrawMode::Outlined {
+            //                     fill_mode: FillMode {
+            //                         color: *color.clone().set_a(0.25),
+            //                         options: FillOptions::default(),
+            //                     },
+            //                     outline_mode: StrokeMode {
+            //                         options: StrokeOptions::default().with_line_width(10.0),
+            //                         color: color,
+            //                     },
+            //                 },
+            //                 transform,
+            //             ),
+            //             layer: InLayer(layer_entity),
+            //         }
+            //     })
+            //     .collect::<Vec<Path>>();
 
             // commands.spawn_batch(rects);
 
-            for mut r in rects {
-                r.rect.visible.is_visible = true;
-                r.rect.visible.is_transparent = false;
-                println!(
-                    "{:?} {:?} {:?} {:?}",
-                    r.rect.path, r.rect.draw, r.rect.global_transform, r.rect.transform
-                );
-                commands.spawn_bundle(r);
-                std::thread::sleep(std::time::Duration::from_millis(500))
-            }
+            // println!("{}", rects.len());
+            // for mut r in rects {
+            //     r.rect.visible.is_visible = true;
+            //     r.rect.visible.is_transparent = true;
+            //     println!(
+            //         "{:?} {:?} {:?} {:?} {:?}",
+            //         r.rect.path.0,
+            //         r.rect.draw,
+            //         r.rect.global_transform,
+            //         r.rect.transform,
+            //         r.rect.visible
+            //     );
+            //     commands.spawn_bundle(r).insert(GlobalTransform::default());
+            //     // std::thread::sleep(std::time::Duration::from_millis(100));
+            // }
 
-            // commands.spawn_batch(polys);
+            commands.spawn_batch(rects);
+            commands.spawn_batch(polys);
             // commands.spawn_batch(paths);
-            println!("Done {:?}", layer);
+            // println!("Done {:?}", layer);
         });
 }
 

@@ -4,20 +4,26 @@ use derive_more::{Deref, DerefMut};
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.25;
-#[derive(Debug, Default, Clone, Copy)]
+
+#[derive(Debug, Component, Default, Clone, Copy)]
 pub struct Layer;
 
-#[derive(Debug, Default, Bundle, Clone, Copy)]
+#[derive(Debug, Component, Default, Bundle, Clone, Copy)]
 pub struct LayerBundle {
     pub layer: Layer,
     pub num: LayerNum,
-    pub color: Color,
+    pub color: LayerColor,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Component, Default, Clone, Copy)]
+pub struct LayerColor(pub Color);
+
+#[derive(Debug, Component, Clone)]
 pub struct InLayer(pub Entity);
 
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut)]
+#[derive(
+    Debug, Component, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut,
+)]
 pub struct LayerNum(pub u16);
 
 // #[derive(Debug, Default, Clone, Deref, DerefMut)]
