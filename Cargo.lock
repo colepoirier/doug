@@ -683,6 +683,12 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
+
+[[package]]
+name = "bytes"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
@@ -1110,10 +1116,9 @@ dependencies = [
  "bevy",
  "bevy_prototype_lyon",
  "derive_more",
- "gds21",
- "layout21raw",
+ "layout21",
  "num-traits",
- "prost",
+ "prost 0.9.0",
 ]
 
 [[package]]
@@ -1316,6 +1321,7 @@ dependencies = [
 [[package]]
 name = "gds21"
 version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
 dependencies = [
  "byteorder",
  "chrono",
@@ -1327,6 +1333,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1707,6 +1714,15 @@ dependencies = [
 
 [[package]]
 name = "itertools"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
@@ -1775,10 +1791,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "layout21"
+version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+dependencies = [
+ "gds21",
+ "layout21protos",
+ "layout21raw",
+ "layout21tetris",
+ "layout21utils",
+ "lef21",
+]
+
+[[package]]
 name = "layout21protos"
 version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
 dependencies = [
- "prost",
+ "prost 0.8.0",
  "prost-build",
  "prost-types",
  "serde",
@@ -1788,6 +1818,7 @@ dependencies = [
 [[package]]
 name = "layout21raw"
 version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
 dependencies = [
  "enum_dispatch",
  "gds21",
@@ -1802,8 +1833,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "layout21tetris"
+version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+dependencies = [
+ "derive_builder",
+ "derive_more",
+ "enum_dispatch",
+ "layout21raw",
+ "layout21utils",
+ "num-integer",
+ "num-traits",
+ "serde",
+ "serde_derive",
+ "slotmap 1.0.6",
+]
+
+[[package]]
 name = "layout21utils"
 version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
 dependencies = [
  "by_address",
  "serde",
@@ -1822,6 +1871,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "lef21"
 version = "0.2.0"
+source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
 dependencies = [
  "derive_builder",
  "derive_more",
@@ -2019,7 +2069,7 @@ dependencies = [
  "fxhash",
  "log",
  "num-traits",
- "petgraph 0.5.1",
+ "petgraph",
  "rose_tree",
  "spirv_headers",
  "thiserror",
@@ -2300,16 +2350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "petgraph"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a13a2fa9d0b63e5f22328828741e523766fff0ee9e779316902290dff3f824f"
-dependencies = [
- "fixedbitset 0.4.0",
- "indexmap",
-]
-
-[[package]]
 name = "pin-project-lite"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2375,32 +2415,76 @@ checksum = "87dfd5592a8eed7e74f56ad7b125f8234763b805c30f0c7c95c486920026a6ec"
 
 [[package]]
 name = "prost"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce49aefe0a6144a45de32927c77bd2859a5f7677b55f220ae5b744e87389c212"
+dependencies = [
+ "bytes 0.5.6",
+ "prost-derive 0.6.1",
+]
+
+[[package]]
+name = "prost"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
+dependencies = [
+ "bytes 1.1.0",
+ "prost-derive 0.8.0",
+]
+
+[[package]]
+name = "prost"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
 dependencies = [
- "bytes",
- "prost-derive",
+ "bytes 1.1.0",
+ "prost-derive 0.9.0",
 ]
 
 [[package]]
 name = "prost-build"
-version = "0.9.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
+checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
 dependencies = [
- "bytes",
+ "bytes 0.5.6",
  "heck",
- "itertools",
- "lazy_static",
+ "itertools 0.8.2",
  "log",
  "multimap",
- "petgraph 0.6.0",
- "prost",
+ "petgraph",
+ "prost 0.6.1",
  "prost-types",
- "regex",
  "tempfile",
  "which",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
+dependencies = [
+ "anyhow",
+ "itertools 0.8.2",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
+dependencies = [
+ "anyhow",
+ "itertools 0.10.1",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2410,7 +2494,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.1",
  "proc-macro2",
  "quote",
  "syn",
@@ -2418,12 +2502,12 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.9.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
+checksum = "1834f67c0697c001304b75be76f67add9c89742eda3a085ad8ee0bb38c3417aa"
 dependencies = [
- "bytes",
- "prost",
+ "bytes 0.5.6",
+ "prost 0.6.1",
 ]
 
 [[package]]
@@ -2563,7 +2647,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284de9dae38774e2813aaabd7e947b4a6fe9b8c58c2309f754a487cdd50de1c2"
 dependencies = [
- "petgraph 0.5.1",
+ "petgraph",
 ]
 
 [[package]]
@@ -3197,12 +3281,10 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "4.2.2"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea187a8ef279bc014ec368c27a920da2024d2a711109bfbe3440585d5cf27ad9"
+checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
 dependencies = [
- "either",
- "lazy_static",
  "libc",
 ]
 

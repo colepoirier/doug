@@ -67,6 +67,13 @@ fn main() {
         .add_event::<LoadProtoEvent>()
         .insert_resource(Msaa { samples: 8 })
         .insert_resource(LayerColors::default())
+        .insert_resource(WindowDescriptor {
+            title: "Doug CAD".to_string(),
+            width: 1920.,
+            height: 1080.,
+            vsync: true,
+            ..Default::default()
+        })
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
         .init_resource::<EventTriggerState>()

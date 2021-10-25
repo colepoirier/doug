@@ -7,8 +7,9 @@ edition = "2021"
 
 [dependencies]
 # Local workspace dependencies
-layout21raw = { path = "../Layout21/layout21raw", features = ["proto"] }
-gds21 = { path = "../Layout21/gds21" }
+layout21 = { git = "https://github.com/dan-fritchman/Layout21.git" }
+# layout21raw = { path = "../Layout21/layout21raw", features = ["proto"] }
+# gds21 = { path = "../Layout21/gds21" }
 # layout21protos = { path = "../Layout21/layout21protos" }
 # layout21utils = { path = "../Layout21/layout21utils" }
 # Crates.io 
