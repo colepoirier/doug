@@ -1,7 +1,7 @@
 pub mod geom;
 pub mod import;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::ScalingMode};
 use bevy_prototype_lyon::prelude::*;
 
 use geom::{Layer, LayerBundle, LayerNum};
@@ -15,7 +15,8 @@ impl Default for LayerColors {
     fn default() -> Self {
         Self {
             colors: vec![
-                "ff0000", "00ff00", "0000ff", "ffff00", "00ffff", "ff00ff", "ffffff",
+                // "ff0000", "00ff00", "0000ff", "ffff00", "00ffff", "ff00ff", "ffffff",
+                "648FFF", "785EF0", "DC267F", "FE6100", "FFB000",
             ]
             .into_iter()
             .map(|c| Color::hex(c).unwrap())
@@ -67,6 +68,7 @@ fn main() {
         .add_event::<LoadProtoEvent>()
         .insert_resource(Msaa { samples: 8 })
         .insert_resource(LayerColors::default())
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(WindowDescriptor {
             title: "Doug CAD".to_string(),
             width: 1920.,
@@ -132,7 +134,10 @@ fn load_proto_event_listener_system(
     // color_query: Query<(&LayerNum, &Color), With<Layer>>,
 ) {
     for _ in events.iter() {
-        import::test_load_proto_lib(&mut commands, &mut layer_colors)
+        let t = std::time::Instant::now();
+        import::test_load_proto_lib(&mut commands, &mut layer_colors);
+        let d = t.elapsed();
+        println!("{:?}", d);
     }
 }
 
@@ -142,10 +147,12 @@ fn setup(mut commands: Commands) {
 
     let mut camera = OrthographicCameraBundle::new_2d();
 
-    camera.orthographic_projection.scale = 10.0;
+    camera.orthographic_projection.scale = 1_000_000.0;
+    camera.orthographic_projection.scaling_mode = ScalingMode::FixedVertical;
+
     camera.transform = Transform::from_xyz(0.0, 0.0, 1_000.0);
-    camera.transform.translation.x = 7_200.0;
-    camera.transform.translation.y = 1_000.0;
+    camera.transform.translation.x = 0.0;
+    camera.transform.translation.y = 1600.0;
     // .looking_at(Vec3::default(), Vec3::Y);
 
     // let direction = camera.transform.local_z();

@@ -25,6 +25,13 @@ bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-fe
     "dynamic",
 ] }
 derive_more = "0.99.16"
+# bevy_prototype_lyon = { path = "../bevy_prototype_lyon" }
 bevy_prototype_lyon = { git = "https://github.com/Nilirad/bevy_prototype_lyon", branch = "master" }
+
 prost = "0.9.0"
+itermore = "0.1.0"
 # bevy_config_cam = { git = "https://github.com/BlackPhlox/bevy_config_cam.git", branch = "master" }
+
+[profile.test]
+opt-level = 3
+debug = 2

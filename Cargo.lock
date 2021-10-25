@@ -1116,6 +1116,7 @@ dependencies = [
  "bevy",
  "bevy_prototype_lyon",
  "derive_more",
+ "itermore",
  "layout21",
  "num-traits",
  "prost 0.9.0",
@@ -1711,6 +1712,12 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
 ]
+
+[[package]]
+name = "itermore"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e23e44d96ab47103d69ec50622c94f2329c88af877029fb6f013573cfb94a8d5"
 
 [[package]]
 name = "itertools"

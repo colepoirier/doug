@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use derive_more::{Deref, DerefMut};
 
 // Set a default alpha-value for most shapes
-pub const ALPHA: f32 = 0.25;
+pub const ALPHA: f32 = 0.0;
 
 #[derive(Debug, Component, Default, Clone, Copy)]
 pub struct Layer;
