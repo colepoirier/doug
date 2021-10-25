@@ -136,7 +136,10 @@ fn setup(mut commands: Commands) {
     let mut camera = OrthographicCameraBundle::new_2d();
 
     camera.orthographic_projection.scale = 10.0;
-    camera.transform = Transform::from_xyz(0.0, 0.0, 1_000.0).looking_at(Vec3::default(), Vec3::Y);
+    camera.transform = Transform::from_xyz(0.0, 0.0, 1_000.0);
+    camera.transform.translation.x = 7_200.0;
+    camera.transform.translation.y = 1_000.0;
+    // .looking_at(Vec3::default(), Vec3::Y);
 
     // let direction = camera.transform.local_z();
     // camera.transform.translation = direction * 1.0;
