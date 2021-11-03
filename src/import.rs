@@ -1,48 +1,55 @@
-use crate::geom::{InLayer, LayerBundle, LayerColor, LayerNum};
 use crate::LayerColors;
+use crate::{InLayer, LayerBundle, LayerColor, LayerNum, WIDTH};
 use bevy::prelude::*;
+use bevy::render::camera::{ActiveCamera, OrthographicProjection};
+use bevy_inspector_egui::Inspectable;
 use bevy_prototype_lyon::entity::ShapeBundle;
-use itermore::IterMore;
 use layout21::raw::gds;
 use layout21::raw::proto::proto;
 use layout21::raw::proto::ProtoExporter;
 use layout21::raw::LayoutResult;
 
-use crate::geom::ALPHA;
+use crate::Paths;
 
-use std::cmp::{max, min};
+use crate::LoadCompleteEvent;
+use crate::ALPHA;
 
 use std::collections::HashMap;
 
-use bevy_prototype_lyon::path::PathBuilder;
 use bevy_prototype_lyon::prelude::{
-    DrawMode, FillMode, FillOptions, Geometry, GeometryBuilder, StrokeMode, StrokeOptions,
+    DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
 use bevy_prototype_lyon::shapes;
 use bevy_prototype_lyon::shapes::RectangleOrigin;
 
-#[derive(Bundle)]
+#[derive(Bundle, Clone)]
 pub struct Rect {
     pub layer: InLayer,
     #[bundle]
     pub rect: ShapeBundle,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Clone)]
 pub struct Poly {
     pub layer: InLayer,
     #[bundle]
     pub poly: ShapeBundle,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Inspectable, Debug, Default, Clone)]
 pub struct Path {
     pub layer: InLayer,
     #[bundle]
     pub path: ShapeBundle,
 }
 
-pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<LayerColors>) {
+pub fn test_load_proto_lib(
+    commands: &mut Commands,
+    layer_colors: &mut ResMut<LayerColors>,
+    paths: &mut ResMut<Paths>,
+    load_complete_event_writer: &mut EventWriter<LoadCompleteEvent>,
+    query: &mut Query<(&mut Transform, &mut OrthographicProjection)>,
+) {
     let plib: proto::Library = proto::open(
         // "./dff1_lib.proto",
         "./oscibear.proto",
@@ -95,7 +102,7 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
     let mut y_min: i64 = 0;
     let mut y_max: i64 = 0;
 
-    plib.cells.iter().for_each(|cell| {
+    plib.cells.iter().enumerate().for_each(|(i, cell)| {
         let mut rects = 0;
         let mut polys = 0;
         let mut paths = 0;
@@ -127,11 +134,26 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                 y_max = std::cmp::max(y_max, y + height);
             }
         }
-        if paths > 10 {
+        if paths > 1 {
             println!(
-                "name: {} rects: {}, polys: {}, paths: {}",
-                cell.name, rects, polys, paths,
+                "index: {}, name: {} rects: {}, polys: {}, paths: {}",
+                i,
+                cell.name,
+                rects,
+                polys,
+                paths,
+                // cell.layout.as_ref().unwrap().instances
             );
+            println!(
+                "x min: {}, max: {}, y min: {}, max: {}",
+                x_min, x_max, y_min, y_max
+            );
+        }
+        if i == 960 {
+            let (mut transform, mut proj) = query.single_mut();
+            proj.scale = (y_max - y_min) as f32 / 1.75;
+            transform.translation.x = (x_max - x_min) as f32 / 10.0;
+            transform.translation.y = (y_max - y_min) as f32 / 2.0;
         }
     });
 
@@ -211,7 +233,7 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                                         options: FillOptions::default(),
                                     },
                                     outline_mode: StrokeMode {
-                                        options: StrokeOptions::default().with_line_width(10.0),
+                                        options: StrokeOptions::default().with_line_width(WIDTH),
                                         color: color,
                                     },
                                 },
@@ -260,7 +282,7 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                                     options: FillOptions::default(),
                                 },
                                 outline_mode: StrokeMode {
-                                    options: StrokeOptions::default().with_line_width(10.0),
+                                    options: StrokeOptions::default().with_line_width(WIDTH),
                                     color: color,
                                 },
                             },
@@ -281,18 +303,6 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                         y_min = std::cmp::min(y_min, p.y);
                         y_max = std::cmp::max(y_max, p.y);
                     }
-                    // let points = points
-                    //     .iter()
-                    //     .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
-                    //     .collect::<Vec<Vec2>>();
-                    // let mut path = PathBuilder::new();
-                    // path.move_to(points[0]);
-
-                    // (&points[1..]).iter().for_each(|p| {
-                    //     path.line_to(*p);
-                    // });
-                    // path.close();
-                    // let path = path.build();
 
                     let points = points
                         .iter()
@@ -317,7 +327,7 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
                                     options: FillOptions::default(),
                                 },
                                 outline_mode: StrokeMode {
-                                    options: StrokeOptions::default().with_line_width(1_000_000.0),
+                                    options: StrokeOptions::default().with_line_width(WIDTH),
                                     color: color,
                                 },
                             },
@@ -359,8 +369,33 @@ pub fn test_load_proto_lib(commands: &mut Commands, layer_colors: &mut ResMut<La
             // }
 
             // std::thread::sleep(std::time::Duration::from_millis(10000));
-
-            commands.spawn_batch(paths);
+            for r in rects
+                .into_iter()
+                .rev()
+                .take(30_000)
+                .collect::<Vec<Rect>>()
+                .chunks(10_000)
+            {
+                commands.spawn_batch(r.to_vec());
+            }
+            for p in polys
+                .into_iter()
+                .rev()
+                .take(30_000)
+                .collect::<Vec<Poly>>()
+                .chunks(10_000)
+            {
+                commands.spawn_batch(p.to_vec());
+            }
+            for p in paths
+                .into_iter()
+                .rev()
+                .take(30_000)
+                .collect::<Vec<Path>>()
+                .chunks(10_000)
+            {
+                commands.spawn_batch(p.to_vec());
+            }
             // println!("Done {:?}", layer);
         }
     }

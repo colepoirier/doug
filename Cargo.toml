@@ -8,29 +8,26 @@ edition = "2021"
 [dependencies]
 # Local workspace dependencies
 layout21 = { git = "https://github.com/dan-fritchman/Layout21.git" }
-# layout21raw = { path = "../Layout21/layout21raw", features = ["proto"] }
-# gds21 = { path = "../Layout21/gds21" }
-# layout21protos = { path = "../Layout21/layout21protos" }
-# layout21utils = { path = "../Layout21/layout21utils" }
+bevy_prototype_lyon = { path = "../bevy_prototype_lyon" }
+bevy_config_cam = { path = "../bevy_config_cam" }
+# bevy-inspector-egui = { git = "https://github.com/jakobhellermann/bevy-inspector-egui", branch = "bevy-main" }
+bevy-inspector-egui = { path = "../bevy-inspector-egui" }
+
 # Crates.io 
 num-traits = "0.2.14"
 anyhow = "1.0.43"
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-features = false, features = [
-    "bevy_wgpu",
-    "bevy_winit",
-    "render",
-    "png",
-    "hdr",
-    "x11",
-    "dynamic",
-] }
 derive_more = "0.99.16"
-# bevy_prototype_lyon = { path = "../bevy_prototype_lyon" }
-bevy_prototype_lyon = { git = "https://github.com/Nilirad/bevy_prototype_lyon", branch = "master" }
-
 prost = "0.9.0"
 itermore = "0.1.0"
-# bevy_config_cam = { git = "https://github.com/BlackPhlox/bevy_config_cam.git", branch = "master" }
+
+[dependencies.bevy]
+version = "0.5.0"
+default-features = false
+features = ["bevy_wgpu", "bevy_winit", "render", "png", "hdr", "x11"]
+
+[patch.crates-io]
+# override it with bevy from git
+bevy = { git = "https://github.com/bevyengine/bevy" }
 
 [profile.test]
 opt-level = 3
