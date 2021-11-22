@@ -1,15 +1,13 @@
 use crate::LayerColors;
 use crate::{InLayer, LayerBundle, LayerColor, LayerNum, WIDTH};
 use bevy::prelude::*;
-use bevy::render::camera::{ActiveCamera, OrthographicProjection};
+use bevy::render::camera::OrthographicProjection;
 use bevy_inspector_egui::Inspectable;
 use bevy_prototype_lyon::entity::ShapeBundle;
 use layout21::raw::gds;
 use layout21::raw::proto::proto;
 use layout21::raw::proto::ProtoExporter;
 use layout21::raw::LayoutResult;
-
-use crate::Paths;
 
 use crate::LoadCompleteEvent;
 use crate::ALPHA;
@@ -20,14 +18,42 @@ use bevy_prototype_lyon::prelude::{
     DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
 use bevy_prototype_lyon::shapes;
-use bevy_prototype_lyon::shapes::RectangleOrigin;
 
-#[derive(Bundle, Clone)]
-pub struct Rect {
+#[derive(Default, Bundle, Clone)]
+pub struct RectBundle {
+    pub rect: Rect,
     pub layer: InLayer,
+    pub origin: RectangleOrigin,
+    pub width: Width,
+    pub height: Height,
     #[bundle]
-    pub rect: ShapeBundle,
+    lyon_shape: ShapeBundle,
 }
+
+/// Defines where the origin, or pivot of the `Rectangle` should be positioned.
+#[derive(Debug, Component, Clone, Copy, PartialEq)]
+pub struct RectangleOrigin {
+    origin: shapes::RectangleOrigin,
+    coord: Vec2,
+}
+
+impl Default for RectangleOrigin {
+    fn default() -> Self {
+        Self {
+            origin: shapes::RectangleOrigin::BottomLeft,
+            coord: Vec2::default(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Component)]
+pub struct Rect;
+
+#[derive(Component, Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Height(pub u32);
+
+#[derive(Component, Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Width(pub u32);
 
 #[derive(Bundle, Clone)]
 pub struct Poly {
@@ -46,8 +72,7 @@ pub struct Path {
 pub fn test_load_proto_lib(
     commands: &mut Commands,
     layer_colors: &mut ResMut<LayerColors>,
-    paths: &mut ResMut<Paths>,
-    load_complete_event_writer: &mut EventWriter<LoadCompleteEvent>,
+    _load_complete_event_writer: &mut EventWriter<LoadCompleteEvent>,
     query: &mut Query<(&mut Transform, &mut OrthographicProjection)>,
 ) {
     let plib: proto::Library = proto::open(
@@ -214,7 +239,7 @@ pub fn test_load_proto_lib(
                         y_max = std::cmp::max(y_max, y + height);
 
                         let rect = shapes::Rectangle {
-                            origin: RectangleOrigin::BottomLeft,
+                            origin: shapes::RectangleOrigin::BottomLeft,
                             extents: Vec2::new(width as f32, height as f32),
                         };
                         // println!("{:?}", rect);
@@ -224,8 +249,12 @@ pub fn test_load_proto_lib(
                             layer as f32,
                         ));
                         // println!("{:?}", transform);
-                        let rect = Rect {
-                            rect: GeometryBuilder::build_as(
+                        let rect = RectBundle {
+                            layer: InLayer(layer_entity),
+
+                            width: Width(width as u32),
+                            height: Height(width as u32),
+                            lyon_shape: GeometryBuilder::build_as(
                                 &rect,
                                 DrawMode::Outlined {
                                     fill_mode: FillMode {
@@ -239,7 +268,7 @@ pub fn test_load_proto_lib(
                                 },
                                 transform,
                             ),
-                            layer: InLayer(layer_entity),
+                            ..Default::default()
                         };
                         // println!(
                         //     "{:?}, {:?}",
@@ -248,7 +277,7 @@ pub fn test_load_proto_lib(
                         rect
                     },
                 )
-                .collect::<Vec<Rect>>();
+                .collect::<Vec<RectBundle>>();
 
             let polys = layer_shapes
                 .polygons
@@ -373,10 +402,12 @@ pub fn test_load_proto_lib(
                 .into_iter()
                 .rev()
                 .take(30_000)
-                .collect::<Vec<Rect>>()
+                .collect::<Vec<RectBundle>>()
                 .chunks(10_000)
             {
                 commands.spawn_batch(r.to_vec());
+                // early out after 10_000
+                break;
             }
             for p in polys
                 .into_iter()
@@ -386,6 +417,8 @@ pub fn test_load_proto_lib(
                 .chunks(10_000)
             {
                 commands.spawn_batch(p.to_vec());
+                // early out after 10_000
+                break;
             }
             for p in paths
                 .into_iter()
@@ -395,6 +428,8 @@ pub fn test_load_proto_lib(
                 .chunks(10_000)
             {
                 commands.spawn_batch(p.to_vec());
+                // early out after 10_000
+                break;
             }
             // println!("Done {:?}", layer);
         }

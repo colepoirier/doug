@@ -1,12 +1,13 @@
 pub mod import;
 
-use bevy::reflect::erased_serde::deserialize;
+// use bevy::reflect::erased_serde::deserialize;
 use bevy::render::camera::OrthographicProjection;
 use bevy::{prelude::*, render::camera::ScalingMode};
-use bevy_config_cam::{CameraState, ConfigCam, NoCameraPlayerPlugin, PlayerPlugin};
-use bevy_inspector_egui::RegisterInspectable;
-use bevy_inspector_egui::{widgets::ResourceInspector, Inspectable, InspectorPlugin};
-use bevy_inspector_egui::{WorldInspectorParams, WorldInspectorPlugin};
+// use bevy_config_cam::{CameraState, ConfigCam, NoCameraPlayerPlugin, PlayerPlugin};
+// use bevy_inspector_egui::{widgets::ResourceInspector, InspectorPlugin};
+use bevy_inspector_egui::{
+    Inspectable, RegisterInspectable, WorldInspectorParams, WorldInspectorPlugin,
+};
 use bevy_prototype_lyon::prelude::ShapePlugin;
 use import::Path;
 
@@ -47,11 +48,6 @@ pub enum Shape {
     Poly,
 }
 
-#[derive(Debug, Default, Inspectable)]
-pub struct Paths {
-    pub paths: Vec<Path>,
-}
-
 impl Default for Shape {
     fn default() -> Self {
         Self::Rect
@@ -84,7 +80,6 @@ fn main() {
         .add_event::<LoadCompleteEvent>()
         .insert_resource(Msaa { samples: 8 })
         .insert_resource(LayerColors::default())
-        .insert_resource(Paths::default())
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         // .insert_resource(Vec::<Path>::default())
         .insert_resource(WindowDescriptor {
@@ -108,7 +103,7 @@ fn main() {
         .register_inspectable::<Path>()
         .register_inspectable::<LayerNum>()
         .init_resource::<EventTriggerState>()
-        .add_plugin(NoCameraPlayerPlugin)
+        // .add_plugin(NoCameraPlayerPlugin)
         .add_system(event_trigger_system.system())
         .add_startup_system(setup.system())
         .add_system(load_proto_event_listener_system.system())
@@ -141,27 +136,26 @@ fn event_trigger_system(
     }
 }
 
-// prints events as they come in
-fn draw_shape_event_listener_system(
-    mut events: EventReader<LoadCompleteEvent>,
-    mut commands: Commands,
-    // color_query: Query<(&LayerNum, &Color), With<Layer>>,
-) {
-    for load_complete_event in events.iter() {
-        // test_spawn_path(&mut commands, &color_query);
-        // info!(
-        //     "Added {:?} to {:?}",
-        //     draw_shape_event.shape, draw_shape_event.layer
-        // );
-    }
-}
+// // prints events as they come in
+// fn draw_shape_event_listener_system(
+//     mut events: EventReader<LoadCompleteEvent>,
+//     mut commands: Commands,
+//     // color_query: Query<(&LayerNum, &Color), With<Layer>>,
+// ) {
+//     for load_complete_event in events.iter() {
+//         // test_spawn_path(&mut commands, &color_query);
+//         // info!(
+//         //     "Added {:?} to {:?}",
+//         //     draw_shape_event.shape, draw_shape_event.layer
+//         // );
+//     }
+// }
 
 // prints events as they come in
 fn load_proto_event_listener_system(
     mut events: EventReader<LoadProtoEvent>,
     mut commands: Commands,
     mut layer_colors: ResMut<LayerColors>,
-    mut paths: ResMut<Paths>,
     mut load_complete_event_writer: EventWriter<LoadCompleteEvent>,
     mut query: Query<(&mut Transform, &mut OrthographicProjection)>,
 ) {
@@ -170,7 +164,6 @@ fn load_proto_event_listener_system(
         import::test_load_proto_lib(
             &mut commands,
             &mut layer_colors,
-            &mut paths,
             &mut load_complete_event_writer,
             &mut query,
         );
