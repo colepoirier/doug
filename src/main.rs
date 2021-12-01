@@ -1,19 +1,27 @@
+pub mod editing;
 pub mod import;
 
-// use bevy::reflect::erased_serde::deserialize;
-use bevy::render::camera::OrthographicProjection;
+use std::ops::Mul;
+
+use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
+use bevy::render::camera::{Camera, OrthographicProjection};
 use bevy::{prelude::*, render::camera::ScalingMode};
-// use bevy_config_cam::{CameraState, ConfigCam, NoCameraPlayerPlugin, PlayerPlugin};
-// use bevy_inspector_egui::{widgets::ResourceInspector, InspectorPlugin};
 use bevy_inspector_egui::{
-    Inspectable, RegisterInspectable, WorldInspectorParams, WorldInspectorPlugin,
+    Inspectable, InspectableRegistry, InspectorPlugin, WorldInspectorParams, WorldInspectorPlugin,
 };
-use bevy_prototype_lyon::prelude::ShapePlugin;
-use import::Path;
+use bevy_prototype_lyon::{entity, shapes};
 
 use derive_more::{Deref, DerefMut};
 
+use bevy_prototype_lyon::prelude::*;
+
+use bevy_rapier2d::prelude::*;
+
 // use bevy_config_cam::ConfigCam;
+
+// Set a default alpha-value for most shapes
+pub const ALPHA: f32 = 0.10;
+pub const WIDTH: f32 = 10.0;
 
 #[derive(Debug)]
 pub struct LayerColors {
@@ -28,7 +36,7 @@ impl Default for LayerColors {
                 "648FFF", "785EF0", "DC267F", "FE6100", "FFB000",
             ]
             .into_iter()
-            .map(|c| *Color::hex(c).unwrap().set_a(ALPHA))
+            .map(|c| Color::hex(c).unwrap())
             .collect::<Vec<Color>>()
             .into_iter()
             .cycle(),
@@ -42,7 +50,7 @@ impl LayerColors {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Inspectable)]
+#[derive(Inspectable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum Shape {
     Rect,
     Poly,
@@ -63,19 +71,19 @@ impl Shape {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Inspectable, Debug, Default, Clone, Copy)]
 pub struct DrawShapeEvent {
     pub layer: LayerNum,
     pub shape: Shape,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Inspectable, Debug, Default, Clone, Copy)]
 pub struct LoadProtoEvent;
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Inspectable, Debug, Default, Clone, Copy)]
 pub struct LoadCompleteEvent;
 
 fn main() {
-    App::new()
+    App::build()
         .add_event::<LoadProtoEvent>()
         .add_event::<LoadCompleteEvent>()
         .insert_resource(Msaa { samples: 8 })
@@ -90,24 +98,96 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .insert_resource(WorldInspectorParams {
-            despawnable_entities: true,
-            ..Default::default()
-        })
         .add_plugin(WorldInspectorPlugin::new())
         // .add_plugin(InspectorPlugin::<Resources>::new())
         .add_plugin(ShapePlugin)
         // .add_plugin(ConfigCam)
-        .register_inspectable::<LayerColor>()
-        .register_inspectable::<InLayer>()
-        .register_inspectable::<Path>()
-        .register_inspectable::<LayerNum>()
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .init_resource::<EventTriggerState>()
         // .add_plugin(NoCameraPlayerPlugin)
         .add_system(event_trigger_system.system())
         .add_startup_system(setup.system())
         .add_system(load_proto_event_listener_system.system())
+        // .add_system(print_mouse_events_system.system())
+        .add_system(cursor_collider_sync.system())
+        .add_system_to_stage(CoreStage::PostUpdate, cursor_collider_debug.system())
+        // .add_plugin(InspectorPlugin::<CursorColliderBundle>::new())
         .run();
+}
+
+fn print_mouse_events_system(
+    mut mouse_button_input_events: EventReader<MouseButtonInput>,
+    mut mouse_motion_events: EventReader<MouseMotion>,
+    mut cursor_moved_events: EventReader<CursorMoved>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
+) {
+    for event in mouse_button_input_events.iter() {
+        info!("{:?}", event);
+    }
+
+    for event in mouse_motion_events.iter() {
+        info!("{:?}", event);
+    }
+
+    for event in cursor_moved_events.iter() {
+        info!("{:?}", event);
+    }
+
+    for event in mouse_wheel_events.iter() {
+        info!("{:?}", event);
+    }
+}
+
+fn cursor_collider_debug(
+    mut intersection_events: EventReader<IntersectionEvent>,
+    mut contact_events: EventReader<ContactEvent>,
+) {
+    for intersection_event in intersection_events.iter() {
+        println!("Received intersection event: {:?}", intersection_event);
+    }
+
+    for contact_event in contact_events.iter() {
+        println!("Received contact event: {:?}", contact_event);
+    }
+}
+
+pub fn cursor_collider_sync(
+    mut cursor_moved_events: EventReader<CursorMoved>,
+    mut q0: Query<(Entity, &mut GlobalTransform, &mut ColliderPosition), With<CursorCollider>>,
+    q1: Query<&Transform, (With<Camera>, Without<CursorCollider>)>,
+) {
+    let (e, mut shape_pos, mut collider_pos) = q0.single_mut().unwrap();
+    // println!("CursorCollider is entity {}", e.id());
+    let scale = q1.single().unwrap().scale.x;
+    // cursor_pos.scale.x = 200.0;
+    // cursor_pos.scale.y = 200.0;
+
+    for cursor_pos in cursor_moved_events.iter() {
+        let x = cursor_pos.position.x;
+        let y = cursor_pos.position.y;
+
+        shape_pos.translation.x = x * scale - 1980.0;
+        shape_pos.translation.y = y * scale - 1045.0;
+
+        collider_pos.translation = point![x, y].into();
+
+        // println!(
+        //     "CursorCollider(unique) entity {:?} shape_pos {:?} collider_pos {:?} cursor_pos {:?} scale {:?}",
+        //     e.id(), shape_pos, collider_pos, cursor_pos, scale
+        // );
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct CursorCollider;
+
+#[derive(Default, Bundle)]
+struct CursorColliderBundle {
+    pub cursor: CursorCollider,
+    #[bundle]
+    pub collider: ColliderBundle,
+    #[bundle]
+    pub shape_lyon: entity::ShapeBundle,
 }
 
 struct EventTriggerState {
@@ -173,40 +253,69 @@ fn load_proto_event_listener_system(
 }
 
 fn setup(mut commands: Commands) {
-    // let mut transform = Transform::from_xyz(0.0, 0.0, 1_000.0).looking_at(Vec3::default(), Vec3::Y);
-    // transform.apply_non_uniform_scale(Vec3::new(8.0, 8.0, 1_000.0));
-
     let mut camera = OrthographicCameraBundle::new_2d();
 
-    camera.orthographic_projection.scale = 1_000_000.0;
-    camera.orthographic_projection.scaling_mode = ScalingMode::FixedVertical;
+    camera.orthographic_projection.scaling_mode = ScalingMode::WindowSize;
 
-    camera.transform = Transform::from_xyz(0.0, 0.0, 1_000.0);
-    camera.transform.translation.x = -40000.0;
-    camera.transform.translation.y = 300000.0;
+    commands.spawn_bundle(LightBundle {
+        transform: Transform::from_translation(Vec3::new(1000.0, 10.0, 2000.0)),
+        light: Light {
+            intensity: 100_000_000_.0,
+            range: 6000.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     println!("{:?}", camera.transform);
     commands.spawn_bundle(camera);
+
+    let rect = shapes::Circle {
+        radius: 5.0,
+        center: [0.0, 0.0].into(),
+    };
+
+    let transform = Transform::from_translation(Vec3::new(0.0, 0.0, 0.0));
+
+    let shape_lyon = GeometryBuilder::build_as(
+        &rect,
+        ShapeColors {
+            main: Color::hex("FFFFFF").unwrap(),
+            outline: Color::hex("FFFFFF").unwrap(),
+        },
+        DrawMode::Outlined {
+            fill_options: FillOptions::default(),
+            outline_options: StrokeOptions::default(),
+        },
+        transform,
+    );
+
+    let cursor_collider = CursorColliderBundle {
+        collider: ColliderBundle {
+            shape: ColliderShape::ball(5.0),
+            flags: (ActiveEvents::INTERSECTION_EVENTS | ActiveEvents::CONTACT_EVENTS).into(),
+            ..Default::default()
+        },
+        shape_lyon,
+        ..Default::default()
+    };
+    commands.spawn_bundle(cursor_collider);
 }
 
-// Set a default alpha-value for most shapes
-pub const ALPHA: f32 = 0.25;
-pub const WIDTH: f32 = 1000.0;
-
-#[derive(Debug, Component, Default, Clone, Copy, Inspectable)]
+#[derive(Inspectable, Debug, Default, Clone, Copy)]
 pub struct Layer;
 
-#[derive(Debug, Component, Default, Bundle, Clone, Copy, Inspectable)]
+#[derive(Inspectable, Debug, Default, Bundle, Clone, Copy)]
 pub struct LayerBundle {
     pub layer: Layer,
     pub num: LayerNum,
     pub color: LayerColor,
 }
 
-#[derive(Debug, Component, Default, Clone, Copy, Inspectable)]
+#[derive(Inspectable, Debug, Default, Clone, Copy)]
 pub struct LayerColor(pub Color);
 
-#[derive(Debug, Component, Clone, Inspectable)]
+#[derive(Inspectable, Debug, Clone)]
 pub struct InLayer(pub Entity);
 
 impl Default for InLayer {
@@ -216,17 +325,6 @@ impl Default for InLayer {
 }
 
 #[derive(
-    Debug,
-    Component,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Clone,
-    Copy,
-    Deref,
-    DerefMut,
-    Inspectable,
+    Inspectable, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut,
 )]
 pub struct LayerNum(pub u16);
