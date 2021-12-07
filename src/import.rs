@@ -7,6 +7,7 @@ use bevy_prototype_lyon::prelude::{
     DrawMode, FillOptions, GeometryBuilder, ShapeColors, StrokeOptions,
 };
 use bevy_prototype_lyon::shapes;
+use std::io::{BufWriter, Write};
 
 use layout21::raw::gds;
 use layout21::raw::proto::proto;
@@ -99,18 +100,18 @@ pub fn test_load_proto_lib(
     }
 
     layers.sort();
-    // println!("{}", layers.len());
+    // info!("{}", layers.len());
 
     layers.dedup();
-    // println!("{}", layers.len());
-    // println!("{:?}", layers);
+    // info!("{}", layers.len());
+    // info!("{:?}", layers);
 
     let layers = layers
         .iter()
         .map(|&num| (num, layer_colors.get_color()))
         .collect::<Vec<(i64, Color)>>();
 
-    // println!("{:?}", layers);
+    // info!("{:?}", layers);
 
     let mut layer_map = HashMap::<u16, (Entity, Color)>::default();
 
@@ -139,7 +140,7 @@ pub fn test_load_proto_lib(
     //     // .rev()
     //     // .take(10)
     //     {
-    //         // println!("{:?}", cell);
+    //         // info!("{:?}", cell);
 
     //         rects += layer_shapes.rectangles.len();
     //         polys += layer_shapes.polygons.len();
@@ -164,7 +165,7 @@ pub fn test_load_proto_lib(
     //         }
     //     }
     //     if paths > 1 {
-    //         println!(
+    //         info!(
     //             "index: {}, name: {} rects: {}, polys: {}, paths: {}",
     //             i,
     //             cell.name,
@@ -173,14 +174,14 @@ pub fn test_load_proto_lib(
     //             paths,
     //             // cell.layout.as_ref().unwrap().instances
     //         );
-    //         println!(
+    //         info!(
     //             "x min: {}, max: {}, y min: {}, max: {}",
     //             x_min, x_max, y_min, y_max
     //         );
     //     }
     // });
 
-    // println!(
+    // info!(
     //     "x min: {}, max: {}, y min: {}, max: {}",
     //     x_min, x_max, y_min, y_max
     // );
@@ -189,6 +190,12 @@ pub fn test_load_proto_lib(
     let mut x_max: i64 = 0;
     let mut y_min: i64 = 0;
     let mut y_max: i64 = 0;
+
+    info!("{:?} {}", plib.units(), plib.units);
+
+    let f = std::fs::File::create("debug.txt").unwrap();
+
+    let mut writer = std::io::BufWriter::new(f);
 
     for cell in plib.cells.iter().nth(770) {
         let len = cell
@@ -202,17 +209,16 @@ pub fn test_load_proto_lib(
 
         let len: usize = len.into_iter().sum();
 
-        println!("{:?} {}", cell.name, len);
+        info!("{:?} {}", cell.name, len);
         // break;
         for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter()
         // .rev()
         // .take(10)
         {
-            // println!("{:?}", cell);
+            // info!("{:?}", cell);
             let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
-            let (layer_entity, color) = layer_map.get(&layer).unwrap();
+            let (_, color) = layer_map.get(&layer).unwrap();
             let color = *color;
-            let layer_entity = *layer_entity;
             let rects = layer_shapes
                 .rectangles
                 .iter()
@@ -223,6 +229,25 @@ pub fn test_load_proto_lib(
                          lower_left,
                          net,
                      }| {
+                        info!(
+                            "width: {} height: {} lower_left: {:?} net: {:?}",
+                            width, height, lower_left, net
+                        );
+
+                        writer
+                            .write(
+                                &format!(
+                                    "lower_left: {:>9?} width: {:>9} height: {:>9} layer: {:>5?} net: {:>10?}\n",
+                                    lower_left,
+                                    width,
+                                    height,
+                                    layer_shapes.layer.as_ref().unwrap(),
+                                    net,
+                                )
+                                .as_bytes(),
+                            )
+                            .unwrap();
+
                         let proto::Point { x, y } = lower_left.as_ref().unwrap();
                         let ix = *x;
                         let iy = *y;
@@ -263,7 +288,7 @@ pub fn test_load_proto_lib(
 
                         RectBundle {
                             name: Nom(net.clone()),
-                            layer: InLayer(layer_entity),
+                            layer: InLayer(layer),
                             shape_rapier: RapierShapeBundle {
                                 collider: ColliderBundle {
                                     shape: ColliderShape::cuboid(width, height),
@@ -282,9 +307,9 @@ pub fn test_load_proto_lib(
                 )
                 .collect::<Vec<RectBundle>>();
 
-            for r in rects.iter() {
-                println!("{:?}", r.shape_lyon.transform)
-            }
+            // for r in rects.iter() {
+            //     info!("{:?}", r.shape_lyon.transform)
+            // }
 
             let polys = layer_shapes
                 .polygons
@@ -326,7 +351,7 @@ pub fn test_load_proto_lib(
                         .collect::<Vec<Point<f32>>>();
 
                     PolygonBundle {
-                        layer: InLayer(layer_entity),
+                        layer: InLayer(layer),
                         shape_lyon,
                         shape_rapier: RapierShapeBundle {
                             collider: ColliderBundle {
@@ -383,7 +408,7 @@ pub fn test_load_proto_lib(
                         .collect::<Vec<Point<f32>>>();
 
                     PathBundle {
-                        layer: InLayer(layer_entity),
+                        layer: InLayer(layer),
                         shape_lyon,
                         shape_rapier: RapierShapeBundle {
                             collider: ColliderBundle {
@@ -402,11 +427,11 @@ pub fn test_load_proto_lib(
 
             // commands.spawn_batch(rects);
 
-            // println!("{}", rects.len());
+            // info!("{}", rects.len());
             // for mut r in rects {
             //     r.rect.visible.is_visible = true;
             //     r.rect.visible.is_transparent = true;
-            //     println!(
+            //     info!(
             //         "{:?} {:?} {:?} {:?} {:?}",
             //         r.rect.path.0,
             //         r.rect.draw,
@@ -417,7 +442,7 @@ pub fn test_load_proto_lib(
             //     commands.spawn_bundle(r).insert(GlobalTransform::default());
             //     // std::thread::sleep(std::time::Duration::from_millis(100));
             // }
-            println!(
+            info!(
                 "x min: {}, max: {}, y min: {}, max: {}",
                 x_min, x_max, y_min, y_max
             );
@@ -426,7 +451,7 @@ pub fn test_load_proto_lib(
             // let chunk_size = 100_000;
             // for (i, p) in paths.chunks(chunk_size).enumerate() {
             //     commands.spawn_batch(p.to_vec());
-            //     println!("{}", chunk_size * i);
+            //     info!("{}", chunk_size * i);
             //     std::thread::sleep(std::time::Duration::from_secs(1));
             // }
 
@@ -457,13 +482,13 @@ pub fn test_load_proto_lib(
                     .collect::<Vec<PathBundle>>(),
             );
 
-            // println!("Done {:?}", layer);
+            // info!("Done {:?}", layer);
         }
     }
 
     let (mut transform, _) = query.single_mut().unwrap();
     // let s = (x_max - x_min).abs().max((y_max - y_min).abs()) as f32 / 2.0;
-    println!(
+    info!(
         "x min {} max {}   y min {} max {}",
         x_min, x_max, y_min, y_max
     );
@@ -478,7 +503,7 @@ pub fn test_load_proto_lib(
     transform.translation.x = 1920.0;
     transform.translation.y = 1080.0;
 
-    // println!("Scale: {}", proj.scale);
+    // info!("Scale: {}", proj.scale);
 }
 
 fn read_lib_gds_write_proto() -> LayoutResult<()> {
@@ -513,8 +538,8 @@ fn make_oscibear_proto() -> LayoutResult<()> {
 
     // Convert to Layout21::Raw
     let lib = gds::GdsImporter::import(&gds, None)?;
-    println!("{}", lib.name);
-    println!("{}", lib.cells.len());
+    info!("{}", lib.name);
+    info!("{}", lib.cells.len());
 
     // // Get the first (and only) cell
     // let cell = lib.cells.first().unwrap().clone();
@@ -523,7 +548,7 @@ fn make_oscibear_proto() -> LayoutResult<()> {
 
     // // Convert to ProtoBuf
     let p = ProtoExporter::export(&lib)?;
-    println!("{}", p.domain);
+    info!("{}", p.domain);
 
     proto::save(&p, "oscibear.proto").unwrap();
 
