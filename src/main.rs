@@ -1,9 +1,8 @@
 pub mod editing;
 pub mod import;
 
-use std::borrow::Borrow;
-use std::ops::Mul;
-
+use bevy::ecs::archetype::Archetypes;
+use bevy::ecs::component::{Component, ComponentId, Components};
 use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::render::camera::{Camera, OrthographicProjection};
 use bevy::{prelude::*, render::camera::ScalingMode};
@@ -16,10 +15,6 @@ use bevy_rapier2d::rapier::parry::bounding_volume::AABB;
 use derive_more::{Deref, DerefMut};
 
 use bevy_prototype_lyon::prelude::*;
-
-use bevy_rapier2d::prelude::*;
-use import::Nom;
-
 // use bevy_config_cam::ConfigCam;
 
 // Set a default alpha-value for most shapes
@@ -56,32 +51,32 @@ impl LayerColors {
     }
 }
 
-#[derive(Inspectable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum Shape {
-    Rect,
-    Poly,
-}
+// #[derive(Inspectable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+// pub enum Shape {
+//     Rect,
+//     Poly,
+// }
 
-impl Default for Shape {
-    fn default() -> Self {
-        Self::Rect
-    }
-}
+// impl Default for Shape {
+//     fn default() -> Self {
+//         Self::Rect
+//     }
+// }
 
-impl Shape {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Rect => "RECT",
-            Self::Poly => "POLY",
-        }
-    }
-}
+// impl Shape {
+//     pub fn as_str(&self) -> &'static str {
+//         match self {
+//             Self::Rect => "RECT",
+//             Self::Poly => "POLY",
+//         }
+//     }
+// }
 
-#[derive(Inspectable, Debug, Default, Clone, Copy)]
-pub struct DrawShapeEvent {
-    pub layer: LayerNum,
-    pub shape: Shape,
-}
+// #[derive(Inspectable, Debug, Default, Clone, Copy)]
+// pub struct DrawShapeEvent {
+//     pub layer: LayerNum,
+//     pub shape: Shape,
+// }
 
 #[derive(Inspectable, Debug, Default, Clone, Copy)]
 pub struct LoadProtoEvent;
@@ -108,18 +103,14 @@ fn main() {
         // .add_plugin(InspectorPlugin::<Resources>::new())
         .add_plugin(ShapePlugin)
         // .add_plugin(ConfigCam)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .init_resource::<EventTriggerState>()
         // .add_plugin(NoCameraPlayerPlugin)
         .add_system(event_trigger_system.system())
         .add_startup_system(setup.system())
         .add_system(load_proto_event_listener_system.system())
         .add_system(cursor_instersect_system.system())
-        .insert_resource(QueryPipeline::default())
         // .add_system(print_mouse_events_system.system())
-        .add_system(cursor_collider_sync.system())
-        .add_system_to_stage(CoreStage::PostUpdate, cursor_collider_debug.system())
-        // .add_plugin(InspectorPlugin::<CursorColliderBundle>::new())
+        .add_system(cursor_collider_debug_sync.system()) // .add_plugin(InspectorPlugin::<CursorColliderBundle>::new())
         .add_system(camera_changed_system.system())
         .run();
 }
@@ -153,24 +144,11 @@ fn print_mouse_events_system(
     }
 }
 
-fn cursor_collider_debug(
-    mut intersection_events: EventReader<IntersectionEvent>,
-    mut contact_events: EventReader<ContactEvent>,
-) {
-    for intersection_event in intersection_events.iter() {
-        info!("Received intersection event: {:?}", intersection_event);
-    }
-
-    for contact_event in contact_events.iter() {
-        info!("Received contact event: {:?}", contact_event);
-    }
-}
-
-pub fn cursor_collider_sync(
+pub fn cursor_collider_debug_sync(
     mut cursor_moved_events: EventReader<CursorMoved>,
-    mut cursor_q: Query<&mut Transform, With<CursorCollider>>,
+    mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
     windows: Res<Windows>,
-    camera_q: Query<&Transform, (With<Camera>, Without<CursorCollider>)>,
+    camera_q: Query<&Transform, (With<Camera>, Without<CursorColliderDebug>)>,
 ) {
     let mut shape_pos = cursor_q.single_mut().unwrap();
     // info!("CursorCollider is entity {}", e.id());
@@ -220,83 +198,50 @@ pub fn cursor_collider_sync(
     }
 }
 
+pub fn get_components_for_entity<'a>(
+    entity: Entity,
+    archetypes: &'a Archetypes,
+) -> Option<impl Iterator<Item = ComponentId> + 'a> {
+    for archetype in archetypes.iter() {
+        if archetype.entities().contains(&entity) {
+            return Some(archetype.components());
+        }
+    }
+    None
+}
+
 /* Project a point inside of a system. */
 fn cursor_instersect_system(
-    cursor_collider: Query<&Transform, With<CursorCollider>>,
-    query_pipeline: Res<QueryPipeline>,
-    collider_query: QueryPipelineColliderComponentsQuery,
-    mut entity_shape_query: Query<(&mut Visible, &InLayer, &ColliderPosition, &ColliderShape)>,
+    archetypes: &Archetypes,
+    components: &Components,
+    cursor_collider_q: Query<&Transform, With<CursorColliderDebug>>,
+    entity_shape_query: Query<(&Visible, &InLayer, &import::Rect)>,
+    windows: Res<Windows>,
+    camera_q: Query<(&GlobalTransform, &Camera), Without<CursorColliderDebug>>,
 ) {
-    for t in cursor_collider.iter() {
-        // Wrap the bevy query so it can be used by the query pipeline.
-        let collider_set = QueryPipelineColliderComponentsSet(&collider_query);
+    let (cam_t, cam) = camera_q.single().unwrap();
 
-        let point: Point<Real> = [t.translation.x, t.translation.y].into();
-        // info!("Testing for intersections with point {}", point.coords);
-        // let solid = true;
-        let groups = InteractionGroups::all();
-        let filter = None;
+    let window = windows.get(cam.window).unwrap();
+    let window_size = Vec2::new(window.width(), window.height());
 
-        // if let Some((handle, projection)) =
-        //     query_pipeline.project_point(&collider_set, &point, solid, groups, filter)
-        // {
-        //     // The collider closest to the point has this `handle`.
-        //     info!(
-        //         "Projected point on entity {:?}. Point projection: {}",
-        //         handle.entity(),
-        //         projection.point
-        //     );
-        //     info!(
-        //         "Point was inside of the collider shape: {}",
-        //         projection.is_inside
-        //     );
-        // }
+    // Convert screen position [0..resolution] to ndc [-1..1]
+    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
 
-        query_pipeline.intersections_with_point(&collider_set, &point, groups, filter, |handle| {
-            // Callback called on each collider with a shape containing the point.
-            // info!("The entity {:?} contains the point.", handle.entity());
-            // let mut colors = entity_shape_query.get_mut(handle.entity()).unwrap();
+    let screen_pos = cursor_collider_q.single().unwrap().translation.truncate();
 
-            // colors.outline = Color::rgb(1.0, 1.0, 1.0);
+    let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
+    let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+    world_pos.truncate();
 
-            let (mut visible, layer, pt, shape) =
-                entity_shape_query.get_mut(handle.entity()).unwrap();
-
-            match shape.as_typed_shape() {
-                TypedShape::Cuboid(c) => {
-                    let b = c.local_aabb();
-                    // info!(
-                    //     "layer: {:?} extents: {:?} center: {:?} verticies: {:?} he: {:?} we: {:?} pt: {:?}",
-                    //     // "mins: {:?}, maxs: {:?}, min,cursor,max x: {}, {}, {} y: {}, {}, {}",
-                    //     layer,
-                    //     // mins, maxs, mins[0], point[0], maxs[0], mins[1], point[1], maxs[1],
-                    //     b.extents(),
-                    //     b.center(),
-                    //     b.vertices(),
-                    //     c.half_extents,
-                    //     b.split_at_center(),
-                    //     pt,
-                    // )
-                }
-                _ => (),
-            };
-
-            // visible.is_transparent = false;
-
-            // Return `false` instead if we want to stop searching for other colliders containing this point.
-            true
-        });
-    }
+    let collider_t = cursor_collider_q.single().unwrap();
 }
 
 #[derive(Debug, Default)]
-pub struct CursorCollider;
+pub struct CursorColliderDebug;
 
 #[derive(Default, Bundle)]
 struct CursorColliderBundle {
-    pub cursor: CursorCollider,
-    // #[bundle]
-    // pub collider: ColliderBundle,
+    pub cursor: CursorColliderDebug,
     #[bundle]
     pub shape_lyon: entity::ShapeBundle,
 }

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::LayerColors;
 use crate::{InLayer, LayerBundle, LayerColor, LayerNum, WIDTH};
 use bevy::prelude::*;
@@ -7,7 +9,7 @@ use bevy_prototype_lyon::prelude::{
     DrawMode, FillOptions, GeometryBuilder, ShapeColors, StrokeOptions,
 };
 use bevy_prototype_lyon::shapes;
-use std::io::{BufWriter, Write};
+// use std::io::{BufWriter, Write};
 
 use layout21::raw::gds;
 use layout21::raw::proto::proto;
@@ -20,20 +22,18 @@ use crate::ALPHA;
 use bevy::utils::HashMap;
 
 use bevy_inspector_egui::Inspectable;
-use bevy_rapier2d::prelude::*;
 
-#[derive(Default, Bundle)]
-pub struct RapierShapeBundle {
-    #[bundle]
-    collider: ColliderBundle,
-    sync: ColliderPositionSync,
+#[derive(Debug, Default)]
+pub struct Rect {
+    pub width: u32,
+    pub height: u32,
+    pub origin: proto::Point,
 }
-
-#[derive(Inspectable, Debug, Default)]
-pub struct Rect;
 
 #[derive(Inspectable, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Nom(String);
+
+// pub trait Shape: Debug {}
 
 #[derive(Default, Bundle)]
 pub struct RectBundle {
@@ -42,36 +42,32 @@ pub struct RectBundle {
     pub layer: InLayer,
     #[bundle]
     pub shape_lyon: entity::ShapeBundle,
-    #[bundle]
-    pub shape_rapier: RapierShapeBundle,
 }
 
 #[derive(Inspectable, Debug, Default)]
 pub struct Path;
+
+// impl Shape for Path {}
 
 #[derive(Default, Bundle)]
 pub struct PathBundle {
     pub rect: Path,
     pub layer: InLayer,
     #[bundle]
-    #[bundle]
     pub shape_lyon: entity::ShapeBundle,
-    #[bundle]
-    pub shape_rapier: RapierShapeBundle,
 }
 
 #[derive(Inspectable, Debug, Default)]
 pub struct Polygon;
+
+// impl Shape for Polygon {}
 
 #[derive(Default, Bundle)]
 pub struct PolygonBundle {
     pub rect: Polygon,
     pub layer: InLayer,
     #[bundle]
-    #[bundle]
     pub shape_lyon: entity::ShapeBundle,
-    #[bundle]
-    pub shape_rapier: RapierShapeBundle,
 }
 
 pub fn test_load_proto_lib(
@@ -193,9 +189,9 @@ pub fn test_load_proto_lib(
 
     info!("{:?} {}", plib.units(), plib.units);
 
-    let f = std::fs::File::create("debug.txt").unwrap();
+    // let f = std::fs::File::create("debug.txt").unwrap();
 
-    let mut writer = std::io::BufWriter::new(f);
+    // let mut writer = std::io::BufWriter::new(f);
 
     for cell in plib.cells.iter().nth(770) {
         let len = cell
@@ -234,23 +230,25 @@ pub fn test_load_proto_lib(
                             width, height, lower_left, net
                         );
 
-                        writer
-                            .write(
-                                &format!(
-                                    "lower_left: {:>9?} width: {:>9} height: {:>9} layer: {:>5?} net: {:>10?}\n",
-                                    lower_left,
-                                    width,
-                                    height,
-                                    layer_shapes.layer.as_ref().unwrap(),
-                                    net,
-                                )
-                                .as_bytes(),
-                            )
-                            .unwrap();
+                        // writer
+                        //     .write(
+                        //         &format!(
+                        //             "lower_left: {:>9?} width: {:>9} height: {:>9} layer: {:>5?} net: {:>10?}\n",
+                        //             lower_left,
+                        //             width,
+                        //             height,
+                        //             layer_shapes.layer.as_ref().unwrap(),
+                        //             net,
+                        //         )
+                        //         .as_bytes(),
+                        //     )
+                        //     .unwrap();
 
                         let proto::Point { x, y } = lower_left.as_ref().unwrap();
                         let ix = *x;
                         let iy = *y;
+                        let iwidth = *width;
+                        let iheight = *height;
                         x_min = std::cmp::min(x_min, ix);
                         x_max = std::cmp::max(x_max, ix + width);
                         y_min = std::cmp::min(y_min, iy);
@@ -285,21 +283,16 @@ pub fn test_load_proto_lib(
                             },
                             transform,
                         );
+                        info!("x: {}, y: {}, w: {}, h: {}", x, y, width, height);
 
                         RectBundle {
+                            rect: Rect {
+                                width: iwidth as u32,
+                                height: iheight as u32,
+                                origin: proto::Point { x: ix, y: iy },
+                            },
                             name: Nom(net.clone()),
                             layer: InLayer(layer),
-                            shape_rapier: RapierShapeBundle {
-                                collider: ColliderBundle {
-                                    shape: ColliderShape::cuboid(width, height),
-                                    position: [x, y].into(),
-                                    flags: (ActiveEvents::INTERSECTION_EVENTS
-                                        | ActiveEvents::CONTACT_EVENTS)
-                                        .into(),
-                                    ..Default::default()
-                                },
-                                ..Default::default()
-                            },
                             shape_lyon,
                             ..Default::default()
                         }
@@ -345,24 +338,9 @@ pub fn test_load_proto_lib(
                         transform,
                     );
 
-                    let vertices = vertices
-                        .iter()
-                        .map(|proto::Point { x, y }| point![*x as f32, *y as f32])
-                        .collect::<Vec<Point<f32>>>();
-
                     PolygonBundle {
                         layer: InLayer(layer),
                         shape_lyon,
-                        shape_rapier: RapierShapeBundle {
-                            collider: ColliderBundle {
-                                shape: ColliderShape::convex_polyline(vertices).unwrap(),
-                                flags: (ActiveEvents::INTERSECTION_EVENTS
-                                    | ActiveEvents::CONTACT_EVENTS)
-                                    .into(),
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        },
                         ..Default::default()
                     }
                 })
@@ -402,24 +380,9 @@ pub fn test_load_proto_lib(
                         transform,
                     );
 
-                    let points = points
-                        .iter()
-                        .map(|proto::Point { x, y }| point![*x as f32, *y as f32])
-                        .collect::<Vec<Point<f32>>>();
-
                     PathBundle {
                         layer: InLayer(layer),
                         shape_lyon,
-                        shape_rapier: RapierShapeBundle {
-                            collider: ColliderBundle {
-                                shape: ColliderShape::polyline(points, None),
-                                flags: (ActiveEvents::INTERSECTION_EVENTS
-                                    | ActiveEvents::CONTACT_EVENTS)
-                                    .into(),
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        },
                         ..Default::default()
                     }
                 })
@@ -465,22 +428,22 @@ pub fn test_load_proto_lib(
                     .collect::<Vec<RectBundle>>(),
             );
 
-            commands.spawn_batch(
-                polys
-                    .into_iter()
-                    .into_iter()
-                    .rev()
-                    .take(30_000)
-                    .collect::<Vec<PolygonBundle>>(),
-            );
+            // commands.spawn_batch(
+            //     polys
+            //         .into_iter()
+            //         .into_iter()
+            //         .rev()
+            //         .take(30_000)
+            //         .collect::<Vec<PolygonBundle>>(),
+            // );
 
-            commands.spawn_batch(
-                paths
-                    .into_iter()
-                    .rev()
-                    .take(30_000)
-                    .collect::<Vec<PathBundle>>(),
-            );
+            // commands.spawn_batch(
+            //     paths
+            //         .into_iter()
+            //         .rev()
+            //         .take(30_000)
+            //         .collect::<Vec<PathBundle>>(),
+            // );
 
             // info!("Done {:?}", layer);
         }
