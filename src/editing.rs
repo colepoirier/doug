@@ -1,9 +1,3 @@
-use bevy::{input::mouse::MouseButtonInput, prelude::*};
-
-use bevy::input::mouse::MouseMotion;
-
-// use crate::import::{Height, Origin, Rect, Width};
-
 // #[derive(Component)]
 // pub enum RectSelection {
 //     BottomLeft,

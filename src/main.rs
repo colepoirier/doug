@@ -2,23 +2,18 @@ pub mod editing;
 pub mod import;
 
 use bevy::ecs::archetype::Archetypes;
-use bevy::ecs::component::{Component, ComponentId, Components};
+use bevy::ecs::component::{ComponentId, Components};
 use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::render::camera::{Camera, OrthographicProjection};
 use bevy::{prelude::*, render::camera::ScalingMode};
-use bevy_inspector_egui::{
-    Inspectable, InspectableRegistry, InspectorPlugin, WorldInspectorParams, WorldInspectorPlugin,
-};
-use bevy_prototype_lyon::{entity, shapes};
 
-use bevy_rapier2d::rapier::parry::bounding_volume::AABB;
 use derive_more::{Deref, DerefMut};
 
 use bevy_prototype_lyon::prelude::*;
-// use bevy_config_cam::ConfigCam;
+use bevy_prototype_lyon::{entity, shapes};
 
 // Set a default alpha-value for most shapes
-pub const ALPHA: f32 = 0.10;
+pub const ALPHA: f32 = 0.1;
 pub const WIDTH: f32 = 10.0;
 
 pub const DEFAULT_SCALE: f32 = 10e-2;
@@ -51,7 +46,7 @@ impl LayerColors {
     }
 }
 
-// #[derive(Inspectable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+// #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 // pub enum Shape {
 //     Rect,
 //     Poly,
@@ -72,25 +67,22 @@ impl LayerColors {
 //     }
 // }
 
-// #[derive(Inspectable, Debug, Default, Clone, Copy)]
+// #[derive(Debug, Default, Clone, Copy)]
 // pub struct DrawShapeEvent {
 //     pub layer: LayerNum,
 //     pub shape: Shape,
 // }
 
-#[derive(Inspectable, Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct LoadProtoEvent;
-#[derive(Inspectable, Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct LoadCompleteEvent;
 
 fn main() {
     App::build()
         .add_event::<LoadProtoEvent>()
         .add_event::<LoadCompleteEvent>()
-        .insert_resource(Msaa { samples: 8 })
-        .insert_resource(LayerColors::default())
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
-        // .insert_resource(Vec::<Path>::default())
         .insert_resource(WindowDescriptor {
             title: "Doug CAD".to_string(),
             width: 1920.0,
@@ -98,19 +90,16 @@ fn main() {
             vsync: true,
             ..Default::default()
         })
+        .insert_resource(Msaa { samples: 8 })
+        .insert_resource(LayerColors::default())
         .add_plugins(DefaultPlugins)
-        .add_plugin(WorldInspectorPlugin::new())
-        // .add_plugin(InspectorPlugin::<Resources>::new())
         .add_plugin(ShapePlugin)
-        // .add_plugin(ConfigCam)
         .init_resource::<EventTriggerState>()
-        // .add_plugin(NoCameraPlayerPlugin)
         .add_system(event_trigger_system.system())
         .add_startup_system(setup.system())
         .add_system(load_proto_event_listener_system.system())
         .add_system(cursor_instersect_system.system())
-        // .add_system(print_mouse_events_system.system())
-        .add_system(cursor_collider_debug_sync.system()) // .add_plugin(InspectorPlugin::<CursorColliderBundle>::new())
+        .add_system(cursor_collider_debug_sync.system())
         .add_system(camera_changed_system.system())
         .run();
 }
@@ -358,20 +347,20 @@ fn setup(mut commands: Commands) {
     commands.spawn_bundle(cursor_collider);
 }
 
-#[derive(Inspectable, Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Layer;
 
-#[derive(Inspectable, Debug, Default, Bundle, Clone, Copy)]
+#[derive(Debug, Default, Bundle, Clone, Copy)]
 pub struct LayerBundle {
     pub layer: Layer,
     pub num: LayerNum,
     pub color: LayerColor,
 }
 
-#[derive(Inspectable, Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct LayerColor(pub Color);
 
-#[derive(Inspectable, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct InLayer(pub u16);
 
 impl Default for InLayer {
@@ -380,7 +369,5 @@ impl Default for InLayer {
     }
 }
 
-#[derive(
-    Inspectable, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut,
-)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut)]
 pub struct LayerNum(pub u16);

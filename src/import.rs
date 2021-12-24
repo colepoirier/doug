@@ -21,16 +21,13 @@ use crate::ALPHA;
 
 use bevy::utils::HashMap;
 
-use bevy_inspector_egui::Inspectable;
-
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Rect {
     pub width: u32,
     pub height: u32,
-    pub origin: proto::Point,
+    pub origin: IVec2,
 }
-
-#[derive(Inspectable, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Nom(String);
 
 // pub trait Shape: Debug {}
@@ -44,7 +41,7 @@ pub struct RectBundle {
     pub shape_lyon: entity::ShapeBundle,
 }
 
-#[derive(Inspectable, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Path;
 
 // impl Shape for Path {}
@@ -57,7 +54,7 @@ pub struct PathBundle {
     pub shape_lyon: entity::ShapeBundle,
 }
 
-#[derive(Inspectable, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Polygon;
 
 // impl Shape for Polygon {}
@@ -78,7 +75,7 @@ pub fn test_load_proto_lib(
 ) {
     let plib: proto::Library = proto::open(
         // "./dff1_lib.proto",
-        "./oscibear.proto",
+        "./models/oscibear.proto",
     )
     .unwrap();
 
@@ -289,7 +286,7 @@ pub fn test_load_proto_lib(
                             rect: Rect {
                                 width: iwidth as u32,
                                 height: iheight as u32,
-                                origin: proto::Point { x: ix, y: iy },
+                                origin: [ix as i32, iy as i32].into(),
                             },
                             name: Nom(net.clone()),
                             layer: InLayer(layer),
