@@ -118,7 +118,6 @@ fn main() {
             vsync: true,
             ..Default::default()
         })
-        .insert_resource(Msaa { samples: 4 })
         .insert_resource(LayerColors::default())
         .init_resource::<EventTriggerState>()
         .insert_resource(ViewPortDimensions::default())
