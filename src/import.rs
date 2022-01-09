@@ -10,7 +10,9 @@ use bevy_prototype_lyon::prelude::{
 };
 use bevy_prototype_lyon::shapes;
 // use std::io::{BufWriter, Write};
+use std::slice::Iter;
 
+use layout21::protos::{Cell, LayerShapes};
 use layout21::raw::gds;
 use layout21::raw::proto::proto;
 use layout21::raw::proto::ProtoExporter;
@@ -21,475 +23,274 @@ use crate::ALPHA;
 
 use bevy::utils::HashMap;
 
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Nom(String);
+
+#[derive(Default, Bundle)]
+pub struct ShapeBundle {
+    pub name: Option<Nom>,
+    pub layer: InLayer,
+    #[bundle]
+    pub shape_lyon: entity::ShapeBundle,
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Rect {
     pub width: u32,
     pub height: u32,
     pub origin: IVec2,
 }
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Nom(String);
-
-// pub trait Shape: Debug {}
 
 #[derive(Default, Bundle)]
 pub struct RectBundle {
-    pub name: Nom,
     pub rect: Rect,
-    pub layer: InLayer,
     #[bundle]
-    pub shape_lyon: entity::ShapeBundle,
+    pub shape: ShapeBundle,
+}
+
+#[derive(Debug, Default)]
+pub struct Poly;
+
+#[derive(Default, Bundle)]
+pub struct PolyBundle {
+    pub poly: Poly,
+    #[bundle]
+    pub shape: ShapeBundle,
 }
 
 #[derive(Debug, Default)]
 pub struct Path;
 
-// impl Shape for Path {}
-
 #[derive(Default, Bundle)]
 pub struct PathBundle {
-    pub rect: Path,
-    pub layer: InLayer,
+    pub path: Path,
     #[bundle]
-    pub shape_lyon: entity::ShapeBundle,
+    pub shape: ShapeBundle,
 }
 
-#[derive(Debug, Default)]
-pub struct Polygon;
-
-// impl Shape for Polygon {}
-
-#[derive(Default, Bundle)]
-pub struct PolygonBundle {
-    pub rect: Polygon,
-    pub layer: InLayer,
-    #[bundle]
-    pub shape_lyon: entity::ShapeBundle,
+pub fn get_shapes(cell: &Cell) -> Iter<LayerShapes> {
+    cell.layout.as_ref().unwrap().shapes.iter()
 }
 
-pub fn test_load_proto_lib(
+pub fn load_proto_lib(
     commands: &mut Commands,
     layer_colors: &mut ResMut<LayerColors>,
     _load_complete_event_writer: &mut EventWriter<LoadCompleteEvent>,
-    query: &mut Query<(&mut Transform, &mut OrthographicProjection)>,
+    query: &mut Query<&mut Transform, With<OrthographicProjection>>,
 ) {
+    let t = std::time::Instant::now();
     let plib: proto::Library = proto::open(
-        // "./dff1_lib.proto",
-        "./models/oscibear.proto",
+        "./models/dff1_lib.proto",
+        // "./models/oscibear.proto",
     )
     .unwrap();
 
-    let mut layers = Vec::<i64>::new();
-    for cell in plib.cells.iter() {
-        layers.extend(
-            cell.layout
-                .as_ref()
-                .unwrap()
-                .shapes
-                .iter()
-                .map(|s| s.layer.as_ref().unwrap().number)
-                .collect::<Vec<i64>>(),
-        );
-    }
-
-    layers.sort();
-    // info!("{}", layers.len());
-
-    layers.dedup();
-    // info!("{}", layers.len());
-    // info!("{:?}", layers);
-
-    let layers = layers
-        .iter()
-        .map(|&num| (num, layer_colors.get_color()))
-        .collect::<Vec<(i64, Color)>>();
-
-    // info!("{:?}", layers);
-
-    let mut layer_map = HashMap::<u16, (Entity, Color)>::default();
-
-    for (num, color) in layers {
-        let id = commands
-            .spawn_bundle(LayerBundle {
-                num: LayerNum(num as u16),
-                color: LayerColor(color),
-                ..Default::default()
-            })
-            .id();
-
-        layer_map.insert(num as u16, (id, color));
-    }
-
-    // let mut x_min: i64 = 0;
-    // let mut x_max: i64 = 0;
-    // let mut y_min: i64 = 0;
-    // let mut y_max: i64 = 0;
-
-    // plib.cells.iter().enumerate().for_each(|(i, cell)| {
-    //     let mut rects = 0;
-    //     let mut polys = 0;
-    //     let mut paths = 0;
-    //     for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter()
-    //     // .rev()
-    //     // .take(10)
-    //     {
-    //         // info!("{:?}", cell);
-
-    //         rects += layer_shapes.rectangles.len();
-    //         polys += layer_shapes.polygons.len();
-    //         paths += layer_shapes.paths.len();
-
-    //         for proto::Rectangle {
-    //             width,
-    //             height,
-    //             lower_left,
-    //             ..
-    //         } in layer_shapes.rectangles.iter()
-    //         {
-    //             let proto::Point { x, y } = lower_left.as_ref().unwrap();
-    //             let width = *width;
-    //             let height = *height;
-    //             let x = *x;
-    //             let y = *y;
-    //             x_min = std::cmp::min(x_min, x);
-    //             x_max = std::cmp::max(x_max, x + width);
-    //             y_min = std::cmp::min(y_min, y);
-    //             y_max = std::cmp::max(y_max, y + height);
-    //         }
-    //     }
-    //     if paths > 1 {
-    //         info!(
-    //             "index: {}, name: {} rects: {}, polys: {}, paths: {}",
-    //             i,
-    //             cell.name,
-    //             rects,
-    //             polys,
-    //             paths,
-    //             // cell.layout.as_ref().unwrap().instances
-    //         );
-    //         info!(
-    //             "x min: {}, max: {}, y min: {}, max: {}",
-    //             x_min, x_max, y_min, y_max
-    //         );
-    //     }
-    // });
-
-    // info!(
-    //     "x min: {}, max: {}, y min: {}, max: {}",
-    //     x_min, x_max, y_min, y_max
-    // );
-
-    let mut x_min: i64 = 0;
-    let mut x_max: i64 = 0;
-    let mut y_min: i64 = 0;
-    let mut y_max: i64 = 0;
+    let d = t.elapsed();
+    info!("File open task duration {:?}", d);
 
     info!("{:?} {}", plib.units(), plib.units);
 
-    // let f = std::fs::File::create("debug.txt").unwrap();
+    // let cell = plib.cells.iter().nth(770).unwrap();
+    let cell = plib.cells.iter().nth(0).unwrap();
 
-    // let mut writer = std::io::BufWriter::new(f);
+    let len = get_shapes(cell)
+        .map(|s| s.rectangles.len() + s.polygons.len() + s.paths.len())
+        .collect::<Vec<usize>>();
 
-    for cell in plib.cells.iter().nth(770) {
-        let len = cell
-            .layout
-            .as_ref()
-            .unwrap()
-            .shapes
+    let len: usize = len.into_iter().sum();
+
+    info!("{:?} {}", cell.name, len);
+
+    for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter() {
+        let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
+        let color = layer_colors.get_color();
+        let rects = layer_shapes
+            .rectangles
             .iter()
-            .map(|s| s.paths.len())
-            .collect::<Vec<usize>>();
+            .map(
+                |proto::Rectangle {
+                     width,
+                     height,
+                     lower_left,
+                     net,
+                 }| {
+                    // info!(
+                    //     "width: {} height: {} lower_left: {:?} net: {:?}",
+                    //     width, height, lower_left, net
+                    // );
 
-        let len: usize = len.into_iter().sum();
+                    // writer
+                    //     .write(
+                    //         &format!(
+                    //             "lower_left: {:>9?} width: {:>9} height: {:>9} layer: {:>5?} net: {:>10?}\n",
+                    //             lower_left,
+                    //             width,
+                    //             height,
+                    //             layer_shapes.layer.as_ref().unwrap(),
+                    //             net,
+                    //         )
+                    //         .as_bytes(),
+                    //     )
+                    //     .unwrap();
 
-        info!("{:?} {}", cell.name, len);
-        // break;
-        for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter()
-        // .rev()
-        // .take(10)
-        {
-            // info!("{:?}", cell);
-            let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
-            let (_, color) = layer_map.get(&layer).unwrap();
-            let color = *color;
-            let rects = layer_shapes
-                .rectangles
-                .iter()
-                .map(
-                    |proto::Rectangle {
-                         width,
-                         height,
-                         lower_left,
-                         net,
-                     }| {
-                        info!(
-                            "width: {} height: {} lower_left: {:?} net: {:?}",
-                            width, height, lower_left, net
-                        );
+                    let proto::Point { x, y } = lower_left.as_ref().unwrap();
+                    let ix = *x;
+                    let iy = *y;
+                    let iwidth = *width;
+                    let iheight = *height;
 
-                        // writer
-                        //     .write(
-                        //         &format!(
-                        //             "lower_left: {:>9?} width: {:>9} height: {:>9} layer: {:>5?} net: {:>10?}\n",
-                        //             lower_left,
-                        //             width,
-                        //             height,
-                        //             layer_shapes.layer.as_ref().unwrap(),
-                        //             net,
-                        //         )
-                        //         .as_bytes(),
-                        //     )
-                        //     .unwrap();
+                    let x = *x as f32;
+                    let y = *y as f32;
+                    let width = *width as f32;
+                    let height = *height as f32;
 
-                        let proto::Point { x, y } = lower_left.as_ref().unwrap();
-                        let ix = *x;
-                        let iy = *y;
-                        let iwidth = *width;
-                        let iheight = *height;
-                        x_min = std::cmp::min(x_min, ix);
-                        x_max = std::cmp::max(x_max, ix + width);
-                        y_min = std::cmp::min(y_min, iy);
-                        y_max = std::cmp::max(y_max, iy + height);
+                    let rect = shapes::Rectangle {
+                        origin: shapes::RectangleOrigin::BottomLeft,
+                        width,
+                        height,
+                    };
 
-                        let x = *x as f32;
-                        let y = *y as f32;
-                        let width = *width as f32;
-                        let height = *height as f32;
+                    let transform =
+                        Transform::from_translation(Vec3::new(x as f32, y as f32, layer as f32));
 
-                        let rect = shapes::Rectangle {
-                            origin: shapes::RectangleOrigin::BottomLeft,
-                            width,
-                            height,
-                        };
+                    let shape_lyon = GeometryBuilder::build_as(
+                        &rect,
+                        ShapeColors {
+                            main: *color.clone().set_a(ALPHA),
+                            outline: color,
+                        },
+                        DrawMode::Outlined {
+                            fill_options: FillOptions::default(),
+                            outline_options: StrokeOptions::default().with_line_width(WIDTH),
+                        },
+                        transform,
+                    );
 
-                        let transform = Transform::from_translation(Vec3::new(
-                            x as f32,
-                            y as f32,
-                            layer as f32,
-                        ));
+                    let shape = ShapeBundle {
+                        name: if net != "" {
+                            Some(Nom(net.clone()))
+                        } else {
+                            None
+                        },
+                        shape_lyon,
+                        layer: InLayer(layer),
+                    };
 
-                        let shape_lyon = GeometryBuilder::build_as(
-                            &rect,
-                            ShapeColors {
-                                main: *color.clone().set_a(ALPHA),
-                                outline: color,
-                            },
-                            DrawMode::Outlined {
-                                fill_options: FillOptions::default(),
-                                outline_options: StrokeOptions::default().with_line_width(WIDTH),
-                            },
-                            transform,
-                        );
-                        info!("x: {}, y: {}, w: {}, h: {}", x, y, width, height);
+                    RectBundle {
+                        rect: Rect {
+                            width: iwidth as u32,
+                            height: iheight as u32,
+                            origin: [ix as i32, iy as i32].into(),
+                        },
+                        shape,
+                    }
+                },
+            )
+            .collect::<Vec<RectBundle>>();
 
-                        RectBundle {
-                            rect: Rect {
-                                width: iwidth as u32,
-                                height: iheight as u32,
-                                origin: [ix as i32, iy as i32].into(),
-                            },
-                            name: Nom(net.clone()),
-                            layer: InLayer(layer),
-                            shape_lyon,
-                            ..Default::default()
-                        }
+        let polys = layer_shapes
+            .polygons
+            .iter()
+            .map(|proto::Polygon { vertices, net }| {
+                let poly = shapes::Polygon {
+                    points: vertices
+                        .iter()
+                        .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
+                        .collect::<Vec<Vec2>>(),
+                    closed: true,
+                };
+
+                let transform = Transform::from_translation(Vec3::new(0.0, 0.0, layer as f32));
+
+                let shape_lyon = GeometryBuilder::build_as(
+                    &poly,
+                    ShapeColors {
+                        main: *color.clone().set_a(ALPHA),
+                        outline: color,
                     },
-                )
-                .collect::<Vec<RectBundle>>();
+                    DrawMode::Outlined {
+                        fill_options: FillOptions::default(),
+                        outline_options: StrokeOptions::default().with_line_width(WIDTH),
+                    },
+                    transform,
+                );
 
-            // for r in rects.iter() {
-            //     info!("{:?}", r.shape_lyon.transform)
-            // }
+                let shape = ShapeBundle {
+                    name: if net != "" {
+                        Some(Nom(net.clone()))
+                    } else {
+                        None
+                    },
+                    layer: InLayer(layer),
+                    shape_lyon,
+                };
 
-            let polys = layer_shapes
-                .polygons
-                .iter()
-                .map(|proto::Polygon { vertices, .. }| {
-                    for p in vertices {
-                        x_min = std::cmp::min(x_min, p.x);
-                        x_max = std::cmp::max(x_max, p.x);
-                        y_min = std::cmp::min(y_min, p.y);
-                        y_max = std::cmp::max(y_max, p.y);
-                    }
+                PolyBundle { poly: Poly, shape }
+            })
+            .collect::<Vec<PolyBundle>>();
 
-                    let poly = shapes::Polygon {
-                        points: vertices
-                            .iter()
-                            .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
-                            .collect::<Vec<Vec2>>(),
-                        closed: true,
-                    };
+        let paths = layer_shapes
+            .paths
+            .iter()
+            .map(|proto::Path { points, width, net }| {
+                let path = shapes::Polygon {
+                    points: points
+                        .iter()
+                        .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
+                        .collect::<Vec<Vec2>>(),
+                    closed: false,
+                };
 
-                    let transform = Transform::from_translation(Vec3::new(0.0, 0.0, layer as f32));
+                let transform = Transform::from_translation(Vec3::new(0.0, 0.0, layer as f32));
 
-                    let shape_lyon = GeometryBuilder::build_as(
-                        &poly,
-                        ShapeColors {
-                            main: *color.clone().set_a(ALPHA),
-                            outline: color,
-                        },
-                        DrawMode::Outlined {
-                            fill_options: FillOptions::default(),
-                            outline_options: StrokeOptions::default().with_line_width(WIDTH),
-                        },
-                        transform,
-                    );
+                let shape_lyon = GeometryBuilder::build_as(
+                    &path,
+                    ShapeColors {
+                        main: *color.clone().set_a(ALPHA),
+                        outline: color,
+                    },
+                    DrawMode::Outlined {
+                        fill_options: FillOptions::default(),
+                        outline_options: StrokeOptions::default().with_line_width(*width as f32),
+                    },
+                    transform,
+                );
 
-                    PolygonBundle {
-                        layer: InLayer(layer),
-                        shape_lyon,
-                        ..Default::default()
-                    }
-                })
-                .collect::<Vec<PolygonBundle>>();
+                let shape = ShapeBundle {
+                    name: if net != "" {
+                        Some(Nom(net.clone()))
+                    } else {
+                        None
+                    },
+                    layer: InLayer(layer),
+                    shape_lyon,
+                };
 
-            let paths = layer_shapes
-                .paths
-                .iter()
-                .map(|proto::Path { points, width, .. }| {
-                    for p in points {
-                        x_min = std::cmp::min(x_min, p.x);
-                        x_max = std::cmp::max(x_max, p.x);
-                        y_min = std::cmp::min(y_min, p.y);
-                        y_max = std::cmp::max(y_max, p.y);
-                    }
+                PathBundle { path: Path, shape }
+            })
+            .collect::<Vec<PathBundle>>();
 
-                    let path = shapes::Polygon {
-                        points: points
-                            .iter()
-                            .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
-                            .collect::<Vec<Vec2>>(),
-                        closed: false,
-                    };
+        commands.spawn_batch(rects.into_iter());
 
-                    let transform = Transform::from_translation(Vec3::new(0.0, 0.0, layer as f32));
+        commands.spawn_batch(polys.into_iter().into_iter());
 
-                    let shape_lyon = GeometryBuilder::build_as(
-                        &path,
-                        ShapeColors {
-                            main: *color.clone().set_a(ALPHA),
-                            outline: color,
-                        },
-                        DrawMode::Outlined {
-                            fill_options: FillOptions::default(),
-                            outline_options: StrokeOptions::default().with_line_width(WIDTH),
-                        },
-                        transform,
-                    );
-
-                    PathBundle {
-                        layer: InLayer(layer),
-                        shape_lyon,
-                        ..Default::default()
-                    }
-                })
-                .collect::<Vec<PathBundle>>();
-
-            // commands.spawn_batch(rects);
-
-            // info!("{}", rects.len());
-            // for mut r in rects {
-            //     r.rect.visible.is_visible = true;
-            //     r.rect.visible.is_transparent = true;
-            //     info!(
-            //         "{:?} {:?} {:?} {:?} {:?}",
-            //         r.rect.path.0,
-            //         r.rect.draw,
-            //         r.rect.global_transform,
-            //         r.rect.transform,
-            //         r.rect.visible
-            //     );
-            //     commands.spawn_bundle(r).insert(GlobalTransform::default());
-            //     // std::thread::sleep(std::time::Duration::from_millis(100));
-            // }
-            info!(
-                "x min: {}, max: {}, y min: {}, max: {}",
-                x_min, x_max, y_min, y_max
-            );
-            // commands.spawn_batch(rects);
-            // commands.spawn_batch(polys);
-            // let chunk_size = 100_000;
-            // for (i, p) in paths.chunks(chunk_size).enumerate() {
-            //     commands.spawn_batch(p.to_vec());
-            //     info!("{}", chunk_size * i);
-            //     std::thread::sleep(std::time::Duration::from_secs(1));
-            // }
-
-            // std::thread::sleep(std::time::Duration::from_millis(10000));
-
-            commands.spawn_batch(
-                rects
-                    .into_iter()
-                    .rev()
-                    .take(30_000)
-                    .collect::<Vec<RectBundle>>(),
-            );
-
-            // commands.spawn_batch(
-            //     polys
-            //         .into_iter()
-            //         .into_iter()
-            //         .rev()
-            //         .take(30_000)
-            //         .collect::<Vec<PolygonBundle>>(),
-            // );
-
-            // commands.spawn_batch(
-            //     paths
-            //         .into_iter()
-            //         .rev()
-            //         .take(30_000)
-            //         .collect::<Vec<PathBundle>>(),
-            // );
-
-            // info!("Done {:?}", layer);
-        }
+        commands.spawn_batch(paths.into_iter());
     }
 
-    let (mut transform, _) = query.single_mut().unwrap();
-    // let s = (x_max - x_min).abs().max((y_max - y_min).abs()) as f32 / 2.0;
-    info!(
-        "x min {} max {}   y min {} max {}",
-        x_min, x_max, y_min, y_max
-    );
+    let mut camera_transform = query.single_mut().unwrap();
 
-    let sx = (x_max - x_min).abs();
-    let sy = (y_max - y_min).abs();
+    // info!(
+    //     "[x] min: {}, max: {} [y] min: {}, max: {}",
+    //     x_min, x_max, y_min, y_max
+    // );
 
-    let s = sx.max(sy) as f32 / 1000.0;
+    // let sx = (x_max - x_min).abs();
+    // let sy = (y_max - y_min).abs();
 
-    transform.scale.x = s;
-    transform.scale.y = s;
-    transform.translation.x = 1920.0;
-    transform.translation.y = 1080.0;
+    // let s = sx.max(sy) as f32 / 1000.0;
 
-    // info!("Scale: {}", proj.scale);
-}
-
-fn read_lib_gds_write_proto() -> LayoutResult<()> {
-    let gds = gds::gds21::GdsLibrary::load("./dff1_lib.golden.gds").unwrap();
-
-    // Convert to Layout21::Raw
-    let lib = gds::GdsImporter::import(&gds, None)?;
-    assert_eq!(lib.name, "dff1_lib");
-    assert_eq!(lib.cells.len(), 1);
-
-    // Get the first (and only) cell
-    let cell = lib.cells.first().unwrap().clone();
-    let cell = cell.read()?;
-    assert_eq!(cell.name, "dff1");
-
-    // Convert to ProtoBuf
-    let p = ProtoExporter::export(&lib)?;
-    assert_eq!(p.domain, "dff1_lib");
-
-    proto::save(&p, "dff1_lib.proto").unwrap();
-
-    // And compare against the golden version
-    let p2 = proto::open("./dff1_lib.golden.vlsir.bin").unwrap();
-    assert_eq!(p, p2);
-
-    Ok(())
+    // camera_transform.scale.x = s;
+    // camera_transform.scale.y = s;
 }
 
 #[test]
@@ -501,20 +302,10 @@ fn make_oscibear_proto() -> LayoutResult<()> {
     info!("{}", lib.name);
     info!("{}", lib.cells.len());
 
-    // // Get the first (and only) cell
-    // let cell = lib.cells.first().unwrap().clone();
-    // let cell = cell.read()?;
-    // assert_eq!(cell.name, "dff1");
-
     // // Convert to ProtoBuf
     let p = ProtoExporter::export(&lib)?;
     info!("{}", p.domain);
 
     proto::save(&p, "oscibear.proto").unwrap();
-
-    // // And compare against the golden version
-    // let p2 = proto::open("./dff1_lib.golden.vlsir.bin").unwrap();
-    // assert_eq!(p, p2);
-
     Ok(())
 }

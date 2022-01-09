@@ -15,4 +15,4 @@ layout21 = { git = "https://github.com/dan-fritchman/Layout21.git" }
 [dependencies.bevy]
 version = "0.5.0"
 default-features = false
-features = ["bevy_wgpu", "bevy_winit", "render", "png", "hdr", "x11"]
+features = ["bevy_wgpu", "bevy_winit", "render", "png", "x11"]
