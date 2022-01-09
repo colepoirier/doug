@@ -266,28 +266,27 @@ pub fn cursor_collider_debug_sync_system(
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
     windows: Res<Windows>,
-    camera_q: Query<&Transform, (With<Camera>, Without<CursorColliderDebug>)>,
+    camera_q: Query<(&Transform, &Camera), Without<CursorColliderDebug>>,
 ) {
     let mut shape_pos = cursor_q.single_mut();
-    let scale = camera_q.single().scale.x;
+    let (cam_t, cam) = camera_q.single();
 
-    let window = windows.get_primary().unwrap();
+    let window = windows.get(cam.window).unwrap();
+    let window_size = Vec2::new(window.width(), window.height());
 
     let width = window.width();
     let height = window.height();
 
-    if let Some(cursor_pos) = cursor_moved_events.iter().last() {
-        let x = cursor_pos.position.x;
-        let y = cursor_pos.position.y;
+    // Convert screen position [0..resolution] to ndc [-1..1]
+    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
 
-        let off_x = width + 15.0 * scale;
-        let off_y = height - 1.0 * scale;
+    if let Some(&CursorMoved { position, .. }) = cursor_moved_events.iter().last() {
+        let ndc = (Vec2::new(position.x, position.y) / window_size) * 2.0 - Vec2::ONE;
+        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+        world_pos.truncate();
 
-        let new_x = x * scale - off_x;
-        let new_y = y * scale - off_y;
-
-        shape_pos.translation.x = new_x;
-        shape_pos.translation.y = new_y;
+        shape_pos.translation.x = world_pos.x;
+        shape_pos.translation.y = world_pos.y;
     }
 }
 
@@ -312,21 +311,6 @@ fn cursor_instersect_system(
     windows: Res<Windows>,
     camera_q: Query<(&GlobalTransform, &Camera), Without<CursorColliderDebug>>,
 ) {
-    let (cam_t, cam) = camera_q.single();
-
-    let window = windows.get(cam.window).unwrap();
-    let window_size = Vec2::new(window.width(), window.height());
-
-    // Convert screen position [0..resolution] to ndc [-1..1]
-    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
-
-    let screen_pos = cursor_collider_q.single().translation.truncate();
-
-    let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
-    let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-    world_pos.truncate();
-
-    // let collider_t = cursor_collider_q.single();
 }
 
 // sends event after 1 second
