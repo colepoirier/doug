@@ -1,17 +1,21 @@
-pub mod draw;
 pub mod editing;
 pub mod import;
+pub mod shapes;
 
 use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
-use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
+// use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::render::camera::{Camera, OrthographicProjection};
 use bevy::{prelude::*, render::camera::ScalingMode};
 
 use derive_more::{Deref, DerefMut};
 
+use bevy_prototype_lyon as lyon;
 use bevy_prototype_lyon::prelude::*;
-use bevy_prototype_lyon::{entity, shapes};
+use import::{
+    import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
+    ImportPathEvent, ImportPolyEvent, ImportRectEvent,
+};
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.1;
@@ -19,6 +23,9 @@ pub const WIDTH: f32 = 10.0;
 
 pub const DEFAULT_SCALE: f32 = 10e-2;
 pub const DEFAULT_UNITS: f32 = 10e-9;
+
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Nom(String);
 
 #[derive(Component, Debug)]
 pub struct LayerColors {
@@ -44,16 +51,27 @@ impl LayerColors {
     }
 }
 
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct ViewPortDimensions {
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ViewportDimensions {
     pub x_min: i64,
     pub x_max: i64,
     pub y_min: i64,
     pub y_max: i64,
 }
 
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct LoadProtoEvent;
+impl ViewportDimensions {
+    pub fn update(&mut self, other: &Self) -> () {
+        self.x_min = self.x_min.min(other.x_min);
+        self.x_max = self.x_max.max(other.x_max);
+        self.y_min = self.y_min.min(other.y_min);
+        self.y_max = self.y_max.max(other.y_max);
+    }
+}
+
+#[derive(Component, Debug, Default, Clone)]
+pub struct LoadProtoEvent {
+    lib: String,
+}
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct LoadCompleteEvent;
 
@@ -91,7 +109,7 @@ pub struct CursorColliderDebug;
 struct CursorColliderBundle {
     pub cursor: CursorColliderDebug,
     #[bundle]
-    pub shape_lyon: entity::ShapeBundle,
+    pub shape_lyon: lyon::entity::ShapeBundle,
 }
 
 struct EventTriggerState {
@@ -110,6 +128,9 @@ fn main() {
     App::new()
         .add_event::<LoadProtoEvent>()
         .add_event::<LoadCompleteEvent>()
+        .add_event::<ImportRectEvent>()
+        .add_event::<ImportPolyEvent>()
+        .add_event::<ImportPathEvent>()
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(WindowDescriptor {
             title: "Doug CAD".to_string(),
@@ -120,12 +141,18 @@ fn main() {
         })
         .insert_resource(LayerColors::default())
         .init_resource::<EventTriggerState>()
-        .insert_resource(ViewPortDimensions::default())
+        .insert_resource(ViewportDimensions::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
+        .add_stage("import", SystemStage::parallel())
+        .add_stage_after("import", "update_viewport", SystemStage::parallel())
         .add_system(event_trigger_system)
         .add_startup_system(setup_system)
-        .add_system(load_proto_event_listener_system)
+        .add_system(load_proto_lib_system)
+        .add_system(import_path_system)
+        .add_system(import_rect_system)
+        .add_system(import_poly_system)
+        .add_system(update_camera_viewport_system)
         .add_system(cursor_instersect_system)
         .add_system(cursor_collider_debug_sync_system)
         .add_system(camera_changed_system)
@@ -140,15 +167,9 @@ fn setup_system(mut commands: Commands, windows: Res<Windows>) {
     let width = window.width();
     let height = window.height();
 
-    camera.transform.translation.x = width + 5000.0;
-    camera.transform.translation.y = height;
-    camera.transform.scale.x = 8.0;
-    camera.transform.scale.y = 8.0;
-
-    info!("Camera {:?}", camera.transform);
     commands.spawn_bundle(camera);
 
-    let rect = shapes::Circle {
+    let rect = lyon::shapes::Circle {
         radius: 20.0,
         center: [0.0, 0.0].into(),
     };
@@ -183,28 +204,63 @@ fn camera_changed_system(camera_q: Query<&Transform, (Changed<Transform>, With<C
     }
 }
 
-fn print_mouse_events_system(
-    mut mouse_button_input_events: EventReader<MouseButtonInput>,
-    mut mouse_motion_events: EventReader<MouseMotion>,
-    mut cursor_moved_events: EventReader<CursorMoved>,
-    mut mouse_wheel_events: EventReader<MouseWheel>,
+pub fn update_camera_viewport_system(
+    mut load_complete_event_reader: EventReader<LoadCompleteEvent>,
+    viewport: Res<ViewportDimensions>,
+    mut camera_q: Query<&mut Transform, With<Camera>>,
 ) {
-    for event in mouse_button_input_events.iter() {
-        info!("{:?}", event);
-    }
+    for _ in load_complete_event_reader.iter() {
+        let mut camera_transform = camera_q.single_mut();
 
-    for event in mouse_motion_events.iter() {
-        info!("{:?}", event);
-    }
+        let ViewportDimensions {
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+        } = *viewport;
 
-    for event in cursor_moved_events.iter() {
-        info!("{:?}", event);
-    }
+        info!(
+            "[x] min: {}, max: {} [y] min: {}, max: {}",
+            x_min, x_max, y_min, y_max
+        );
 
-    for event in mouse_wheel_events.iter() {
-        info!("{:?}", event);
+        let x = (x_max - x_min) as f32;
+        let y = (y_max - y_min) as f32;
+
+        info!("x {} y {}", x, y);
+
+        let s = x.max(y) as f32 / 1800.0;
+
+        camera_transform.scale.x = s;
+        camera_transform.scale.y = s;
+
+        camera_transform.translation.x = (x - 1920.0) / 1.8;
+        camera_transform.translation.y = (y - 1080.0) / 1.8;
     }
 }
+
+// fn print_mouse_events_system(
+//     mut mouse_button_input_events: EventReader<MouseButtonInput>,
+//     mut mouse_motion_events: EventReader<MouseMotion>,
+//     mut cursor_moved_events: EventReader<CursorMoved>,
+//     mut mouse_wheel_events: EventReader<MouseWheel>,
+// ) {
+//     for event in mouse_button_input_events.iter() {
+//         info!("{:?}", event);
+//     }
+
+//     for event in mouse_motion_events.iter() {
+//         info!("{:?}", event);
+//     }
+
+//     for event in cursor_moved_events.iter() {
+//         info!("{:?}", event);
+//     }
+
+//     for event in mouse_wheel_events.iter() {
+//         info!("{:?}", event);
+//     }
+// }
 
 pub fn cursor_collider_debug_sync_system(
     mut cursor_moved_events: EventReader<CursorMoved>,
@@ -249,10 +305,10 @@ pub fn get_components_for_entity<'a>(
 
 /* Project a point inside of a system. */
 fn cursor_instersect_system(
-    archetypes: &Archetypes,
-    components: &Components,
+    // archetypes: &Archetypes,
+    // components: &Components,
     cursor_collider_q: Query<&Transform, With<CursorColliderDebug>>,
-    entity_shape_query: Query<(&InLayer, &import::Rect)>,
+    // entity_shape_query: Query<(&InLayer, &import::Rect)>,
     windows: Res<Windows>,
     camera_q: Query<(&GlobalTransform, &Camera), Without<CursorColliderDebug>>,
 ) {
@@ -270,7 +326,7 @@ fn cursor_instersect_system(
     let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
     world_pos.truncate();
 
-    let collider_t = cursor_collider_q.single();
+    // let collider_t = cursor_collider_q.single();
 }
 
 // sends event after 1 second
@@ -282,27 +338,10 @@ fn event_trigger_system(
     state.event_timer.tick(time.delta());
     let timer = &mut state.event_timer;
     if timer.finished() && !timer.paused() {
-        my_events.send(LoadProtoEvent);
+        my_events.send(LoadProtoEvent {
+            lib: "./models/dff1_lib.proto".into(),
+            // "./models/oscibear.proto",
+        });
         timer.pause()
-    }
-}
-
-fn load_proto_event_listener_system(
-    mut events: EventReader<LoadProtoEvent>,
-    mut commands: Commands,
-    mut layer_colors: ResMut<LayerColors>,
-    mut load_complete_event_writer: EventWriter<LoadCompleteEvent>,
-    mut query: Query<&mut Transform, With<OrthographicProjection>>,
-) {
-    for _ in events.iter() {
-        let t = std::time::Instant::now();
-        import::load_proto_lib(
-            &mut commands,
-            &mut layer_colors,
-            &mut load_complete_event_writer,
-            &mut query,
-        );
-        let d = t.elapsed();
-        info!("{:?}", d);
     }
 }
