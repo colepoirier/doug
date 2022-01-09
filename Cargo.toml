@@ -9,10 +9,10 @@ num-traits = "0.2.14"
 anyhow = "1.0.52"
 derive_more = "0.99.17"
 prost = "0.9.0"
-bevy_prototype_lyon = "0.3.1"
+bevy_prototype_lyon = "0.4.0"
 layout21 = { git = "https://github.com/dan-fritchman/Layout21.git" }
 
 [dependencies.bevy]
-version = "0.5.0"
+version = "0.6.0"
 default-features = false
-features = ["bevy_wgpu", "bevy_winit", "render", "png", "x11"]
+features = ["bevy_winit", "render", "png", "x11"]

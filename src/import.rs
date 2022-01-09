@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy::render::camera::OrthographicProjection;
 use bevy_prototype_lyon::entity;
 use bevy_prototype_lyon::prelude::{
-    DrawMode, FillOptions, GeometryBuilder, ShapeColors, StrokeOptions,
+    DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
 use bevy_prototype_lyon::shapes;
 // use std::io::{BufWriter, Write};
@@ -23,45 +23,45 @@ use crate::ALPHA;
 
 use bevy::utils::HashMap;
 
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Component, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Nom(String);
 
-#[derive(Default, Bundle)]
+#[derive(Component, Default, Bundle)]
 pub struct ShapeBundle {
-    pub name: Option<Nom>,
+    pub name: Nom,
     pub layer: InLayer,
     #[bundle]
     pub shape_lyon: entity::ShapeBundle,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy)]
 pub struct Rect {
     pub width: u32,
     pub height: u32,
     pub origin: IVec2,
 }
 
-#[derive(Default, Bundle)]
+#[derive(Component, Default, Bundle)]
 pub struct RectBundle {
     pub rect: Rect,
     #[bundle]
     pub shape: ShapeBundle,
 }
 
-#[derive(Debug, Default)]
+#[derive(Component, Debug, Default)]
 pub struct Poly;
 
-#[derive(Default, Bundle)]
+#[derive(Component, Default, Bundle)]
 pub struct PolyBundle {
     pub poly: Poly,
     #[bundle]
     pub shape: ShapeBundle,
 }
 
-#[derive(Debug, Default)]
+#[derive(Component, Debug, Default)]
 pub struct Path;
 
-#[derive(Default, Bundle)]
+#[derive(Component, Default, Bundle)]
 pub struct PathBundle {
     pub path: Path,
     #[bundle]
@@ -146,8 +146,7 @@ pub fn load_proto_lib(
 
                     let rect = shapes::Rectangle {
                         origin: shapes::RectangleOrigin::BottomLeft,
-                        width,
-                        height,
+                        extents: (width, height).into(),
                     };
 
                     let transform =
@@ -155,23 +154,21 @@ pub fn load_proto_lib(
 
                     let shape_lyon = GeometryBuilder::build_as(
                         &rect,
-                        ShapeColors {
-                            main: *color.clone().set_a(ALPHA),
-                            outline: color,
-                        },
                         DrawMode::Outlined {
-                            fill_options: FillOptions::default(),
-                            outline_options: StrokeOptions::default().with_line_width(WIDTH),
+                            fill_mode: FillMode {
+                                color: *color.clone().set_a(ALPHA),
+                                options: FillOptions::default(),
+                            },
+                            outline_mode: StrokeMode {
+                                options: StrokeOptions::default().with_line_width(WIDTH),
+                                color: color,
+                            },
                         },
                         transform,
                     );
 
                     let shape = ShapeBundle {
-                        name: if net != "" {
-                            Some(Nom(net.clone()))
-                        } else {
-                            None
-                        },
+                        name: Nom(net.to_string()),
                         shape_lyon,
                         layer: InLayer(layer),
                     };
@@ -204,23 +201,21 @@ pub fn load_proto_lib(
 
                 let shape_lyon = GeometryBuilder::build_as(
                     &poly,
-                    ShapeColors {
-                        main: *color.clone().set_a(ALPHA),
-                        outline: color,
-                    },
                     DrawMode::Outlined {
-                        fill_options: FillOptions::default(),
-                        outline_options: StrokeOptions::default().with_line_width(WIDTH),
+                        fill_mode: FillMode {
+                            color: *color.clone().set_a(ALPHA),
+                            options: FillOptions::default(),
+                        },
+                        outline_mode: StrokeMode {
+                            options: StrokeOptions::default().with_line_width(WIDTH),
+                            color: color,
+                        },
                     },
                     transform,
                 );
 
                 let shape = ShapeBundle {
-                    name: if net != "" {
-                        Some(Nom(net.clone()))
-                    } else {
-                        None
-                    },
+                    name: Nom(net.to_string()),
                     layer: InLayer(layer),
                     shape_lyon,
                 };
@@ -245,23 +240,21 @@ pub fn load_proto_lib(
 
                 let shape_lyon = GeometryBuilder::build_as(
                     &path,
-                    ShapeColors {
-                        main: *color.clone().set_a(ALPHA),
-                        outline: color,
-                    },
                     DrawMode::Outlined {
-                        fill_options: FillOptions::default(),
-                        outline_options: StrokeOptions::default().with_line_width(*width as f32),
+                        fill_mode: FillMode {
+                            color: *color.clone().set_a(ALPHA),
+                            options: FillOptions::default(),
+                        },
+                        outline_mode: StrokeMode {
+                            options: StrokeOptions::default().with_line_width(WIDTH),
+                            color: color,
+                        },
                     },
                     transform,
                 );
 
                 let shape = ShapeBundle {
-                    name: if net != "" {
-                        Some(Nom(net.clone()))
-                    } else {
-                        None
-                    },
+                    name: Nom(net.to_string()),
                     layer: InLayer(layer),
                     shape_lyon,
                 };
@@ -277,7 +270,7 @@ pub fn load_proto_lib(
         commands.spawn_batch(paths.into_iter());
     }
 
-    let mut camera_transform = query.single_mut().unwrap();
+    let mut camera_transform = query.single_mut();
 
     // info!(
     //     "[x] min: {}, max: {} [y] min: {}, max: {}",

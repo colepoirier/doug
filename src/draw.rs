@@ -1,6 +1,7 @@
 use crate::ViewPortDimensions;
 use bevy::prelude::*;
 
+#[derive(Debug, Component)]
 pub struct DrawRectEvent {}
 
 pub fn draw_rect(
@@ -10,6 +11,7 @@ pub fn draw_rect(
 ) {
 }
 
+#[derive(Debug, Component)]
 pub struct DrawPolyEvent {}
 
 pub fn draw_poly(
@@ -19,6 +21,7 @@ pub fn draw_poly(
 ) {
 }
 
+#[derive(Debug, Component)]
 pub struct DrawPathEvent {}
 
 pub fn draw_path(

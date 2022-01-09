@@ -20,7 +20,7 @@ pub const WIDTH: f32 = 10.0;
 pub const DEFAULT_SCALE: f32 = 10e-2;
 pub const DEFAULT_UNITS: f32 = 10e-9;
 
-#[derive(Debug)]
+#[derive(Component, Debug)]
 pub struct LayerColors {
     colors: std::iter::Cycle<std::vec::IntoIter<Color>>,
 }
@@ -44,7 +44,7 @@ impl LayerColors {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy)]
 pub struct ViewPortDimensions {
     pub x_min: i64,
     pub x_max: i64,
@@ -52,25 +52,25 @@ pub struct ViewPortDimensions {
     pub y_max: i64,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy)]
 pub struct LoadProtoEvent;
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy)]
 pub struct LoadCompleteEvent;
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy)]
 pub struct Layer;
 
-#[derive(Debug, Default, Bundle, Clone, Copy)]
+#[derive(Component, Debug, Default, Bundle, Clone, Copy)]
 pub struct LayerBundle {
     pub layer: Layer,
     pub num: LayerNum,
     pub color: LayerColor,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy)]
 pub struct LayerColor(pub Color);
 
-#[derive(Debug, Clone)]
+#[derive(Component, Debug, Clone)]
 pub struct InLayer(pub u16);
 
 impl Default for InLayer {
@@ -79,13 +79,15 @@ impl Default for InLayer {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut)]
+#[derive(
+    Component, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut,
+)]
 pub struct LayerNum(pub u16);
 
-#[derive(Debug, Default)]
+#[derive(Component, Debug, Default)]
 pub struct CursorColliderDebug;
 
-#[derive(Default, Bundle)]
+#[derive(Component, Default, Bundle)]
 struct CursorColliderBundle {
     pub cursor: CursorColliderDebug,
     #[bundle]
@@ -105,7 +107,7 @@ impl Default for EventTriggerState {
 }
 
 fn main() {
-    App::build()
+    App::new()
         .add_event::<LoadProtoEvent>()
         .add_event::<LoadCompleteEvent>()
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
@@ -116,22 +118,22 @@ fn main() {
             vsync: true,
             ..Default::default()
         })
-        .insert_resource(Msaa { samples: 8 })
+        .insert_resource(Msaa { samples: 4 })
         .insert_resource(LayerColors::default())
         .init_resource::<EventTriggerState>()
         .insert_resource(ViewPortDimensions::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
-        .add_system(event_trigger_system.system())
-        .add_startup_system(setup.system())
-        .add_system(load_proto_event_listener_system.system())
-        .add_system(cursor_instersect_system.system())
-        .add_system(cursor_collider_debug_sync.system())
-        .add_system(camera_changed_system.system())
+        .add_system(event_trigger_system)
+        .add_startup_system(setup_system)
+        .add_system(load_proto_event_listener_system)
+        .add_system(cursor_instersect_system)
+        .add_system(cursor_collider_debug_sync_system)
+        .add_system(camera_changed_system)
         .run();
 }
 
-fn setup(mut commands: Commands, windows: Res<Windows>) {
+fn setup_system(mut commands: Commands, windows: Res<Windows>) {
     let mut camera = OrthographicCameraBundle::new_2d();
     camera.orthographic_projection.scaling_mode = ScalingMode::WindowSize;
 
@@ -154,13 +156,15 @@ fn setup(mut commands: Commands, windows: Res<Windows>) {
 
     let shape_lyon = GeometryBuilder::build_as(
         &rect,
-        ShapeColors {
-            main: Color::hex("39FF14").unwrap(),
-            outline: Color::hex("FFFFFF").unwrap(),
-        },
         DrawMode::Outlined {
-            fill_options: FillOptions::default(),
-            outline_options: StrokeOptions::default().with_line_width(5.0),
+            fill_mode: FillMode {
+                color: Color::hex("39FF14").unwrap(),
+                options: FillOptions::default(),
+            },
+            outline_mode: StrokeMode {
+                options: StrokeOptions::default().with_line_width(5.0),
+                color: Color::hex("FFFFFF").unwrap(),
+            },
         },
         Transform::from_translation(Vec3::new(width / 1.0, height / 1.0, 998.0)),
     );
@@ -203,14 +207,14 @@ fn print_mouse_events_system(
     }
 }
 
-pub fn cursor_collider_debug_sync(
+pub fn cursor_collider_debug_sync_system(
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
     windows: Res<Windows>,
     camera_q: Query<&Transform, (With<Camera>, Without<CursorColliderDebug>)>,
 ) {
-    let mut shape_pos = cursor_q.single_mut().unwrap();
-    let scale = camera_q.single().unwrap().scale.x;
+    let mut shape_pos = cursor_q.single_mut();
+    let scale = camera_q.single().scale.x;
 
     let window = windows.get_primary().unwrap();
 
@@ -249,11 +253,11 @@ fn cursor_instersect_system(
     archetypes: &Archetypes,
     components: &Components,
     cursor_collider_q: Query<&Transform, With<CursorColliderDebug>>,
-    entity_shape_query: Query<(&Visible, &InLayer, &import::Rect)>,
+    entity_shape_query: Query<(&InLayer, &import::Rect)>,
     windows: Res<Windows>,
     camera_q: Query<(&GlobalTransform, &Camera), Without<CursorColliderDebug>>,
 ) {
-    let (cam_t, cam) = camera_q.single().unwrap();
+    let (cam_t, cam) = camera_q.single();
 
     let window = windows.get(cam.window).unwrap();
     let window_size = Vec2::new(window.width(), window.height());
@@ -261,13 +265,13 @@ fn cursor_instersect_system(
     // Convert screen position [0..resolution] to ndc [-1..1]
     let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
 
-    let screen_pos = cursor_collider_q.single().unwrap().translation.truncate();
+    let screen_pos = cursor_collider_q.single().translation.truncate();
 
     let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
     let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
     world_pos.truncate();
 
-    let collider_t = cursor_collider_q.single().unwrap();
+    let collider_t = cursor_collider_q.single();
 }
 
 // sends event after 1 second
