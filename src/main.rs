@@ -3,7 +3,7 @@ pub mod import;
 pub mod shapes;
 
 use bevy::ecs::archetype::Archetypes;
-use bevy::ecs::component::{ComponentId, Components};
+use bevy::ecs::component::ComponentId;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 // use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::render::camera::Camera;
@@ -12,12 +12,14 @@ use bevy::{prelude::*, render::camera::ScalingMode};
 use derive_more::{Deref, DerefMut};
 
 use bevy_prototype_lyon as lyon;
-use bevy_prototype_lyon::prelude::*;
-use editing::hover_rect_system;
+
+use editing::{highlight_shape_system, hover_rect_system};
 use import::{
     import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
     ImportPathEvent, ImportPolyEvent, ImportRectEvent,
 };
+use lyon::plugin::ShapePlugin;
+use lyon::prelude::{DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions};
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.1;
@@ -104,15 +106,15 @@ impl Default for InLayer {
 )]
 pub struct LayerNum(pub u16);
 
-#[derive(Component, Debug, Default)]
-pub struct CursorColliderDebug;
+// #[derive(Component, Debug, Default)]
+// pub struct CursorColliderDebug;
 
-#[derive(Component, Default, Bundle)]
-struct CursorColliderBundle {
-    pub cursor: CursorColliderDebug,
-    #[bundle]
-    pub shape_lyon: lyon::entity::ShapeBundle,
-}
+// #[derive(Component, Default, Bundle)]
+// struct CursorColliderBundle {
+//     pub cursor: CursorColliderDebug,
+//     #[bundle]
+//     pub shape_lyon: lyon::entity::ShapeBundle,
+// }
 
 struct EventTriggerState {
     event_timer: Timer,
@@ -155,11 +157,11 @@ fn main() {
         .add_system(import_rect_system)
         .add_system(import_poly_system)
         .add_system(update_camera_viewport_system)
-        .add_system(cursor_instersect_system)
-        .add_system(cursor_collider_debug_sync_system)
+        // .add_system(cursor_collider_debug_sync_system)
         .add_system(camera_changed_system)
         .add_system(pan_zoom_camera_system)
         .add_system(hover_rect_system)
+        .add_system(highlight_shape_system)
         .run();
 }
 
@@ -173,33 +175,33 @@ fn setup_system(mut commands: Commands, windows: Res<Windows>) {
 
     commands.spawn_bundle(camera);
 
-    let rect = lyon::shapes::Circle {
-        radius: 20.0,
-        center: [0.0, 0.0].into(),
-    };
+    // let rect = lyon::shapes::Circle {
+    //     radius: 20.0,
+    //     center: [0.0, 0.0].into(),
+    // };
 
-    let shape_lyon = GeometryBuilder::build_as(
-        &rect,
-        DrawMode::Outlined {
-            fill_mode: FillMode {
-                color: Color::hex("39FF14").unwrap(),
-                options: FillOptions::default(),
-            },
-            outline_mode: StrokeMode {
-                options: StrokeOptions::default().with_line_width(5.0),
-                color: Color::hex("FFFFFF").unwrap(),
-            },
-        },
-        Transform::from_translation(Vec3::new(width / 1.0, height / 1.0, 998.0)),
-    );
+    // let shape_lyon = GeometryBuilder::build_as(
+    //     &rect,
+    //     DrawMode::Outlined {
+    //         fill_mode: FillMode {
+    //             color: Color::hex("39FF14").unwrap(),
+    //             options: FillOptions::default(),
+    //         },
+    //         outline_mode: StrokeMode {
+    //             options: StrokeOptions::default().with_line_width(5.0),
+    //             color: Color::hex("FFFFFF").unwrap(),
+    //         },
+    //     },
+    //     Transform::from_translation(Vec3::new(width / 1.0, height / 1.0, 998.0)),
+    // );
 
-    info!("Initial cursor pos: {:?}", shape_lyon.transform);
+    // info!("Initial cursor pos: {:?}", shape_lyon.transform);
 
-    let cursor_collider = CursorColliderBundle {
-        shape_lyon,
-        ..Default::default()
-    };
-    commands.spawn_bundle(cursor_collider);
+    // let cursor_collider = CursorColliderBundle {
+    //     shape_lyon,
+    //     ..Default::default()
+    // };
+    // commands.spawn_bundle(cursor_collider);
 }
 
 pub fn pan_zoom_camera_system(
@@ -280,52 +282,29 @@ pub fn update_camera_viewport_system(
     }
 }
 
-// fn print_mouse_events_system(
-//     mut mouse_button_input_events: EventReader<MouseButtonInput>,
-//     mut mouse_motion_events: EventReader<MouseMotion>,
-//     mut cursor_moved_events: EventReader<CursorMoved>,
-//     mut mouse_wheel_events: EventReader<MouseWheel>,
-// ) {
-//     for event in mouse_button_input_events.iter() {
-//         info!("{:?}", event);
-//     }
-
-//     for event in mouse_motion_events.iter() {
-//         info!("{:?}", event);
-//     }
-
-//     for event in cursor_moved_events.iter() {
-//         info!("{:?}", event);
-//     }
-
-//     for event in mouse_wheel_events.iter() {
-//         info!("{:?}", event);
-//     }
-// }
-
 pub fn cursor_collider_debug_sync_system(
     mut cursor_moved_events: EventReader<CursorMoved>,
-    mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
+    // mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
     windows: Res<Windows>,
-    camera_q: Query<(&Transform, &Camera), Without<CursorColliderDebug>>,
+    // camera_q: Query<(&Transform, &Camera), Without<CursorColliderDebug>>,
 ) {
-    let mut shape_pos = cursor_q.single_mut();
-    let (cam_t, cam) = camera_q.single();
+    // let mut shape_pos = cursor_q.single_mut();
+    // let (cam_t, cam) = camera_q.single();
 
-    let window = windows.get(cam.window).unwrap();
-    let window_size = Vec2::new(window.width(), window.height());
+    // let window = windows.get(cam.window).unwrap();
+    // let window_size = Vec2::new(window.width(), window.height());
 
-    // Convert screen position [0..resolution] to ndc [-1..1]
-    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
+    // // Convert screen position [0..resolution] to ndc [-1..1]
+    // let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
 
-    if let Some(&CursorMoved { position, .. }) = cursor_moved_events.iter().last() {
-        let ndc = (Vec2::new(position.x, position.y) / window_size) * 2.0 - Vec2::ONE;
-        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-        world_pos.truncate();
+    // if let Some(&CursorMoved { position, .. }) = cursor_moved_events.iter().last() {
+    //     let ndc = (Vec2::new(position.x, position.y) / window_size) * 2.0 - Vec2::ONE;
+    //     let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+    //     world_pos.truncate();
 
-        shape_pos.translation.x = world_pos.x;
-        shape_pos.translation.y = world_pos.y;
-    }
+    //     shape_pos.translation.x = world_pos.x;
+    //     shape_pos.translation.y = world_pos.y;
+    // }
 }
 
 pub fn get_components_for_entity<'a>(
@@ -338,17 +317,6 @@ pub fn get_components_for_entity<'a>(
         }
     }
     None
-}
-
-/* Project a point inside of a system. */
-fn cursor_instersect_system(
-    // archetypes: &Archetypes,
-    // components: &Components,
-    cursor_collider_q: Query<&Transform, With<CursorColliderDebug>>,
-    // entity_shape_query: Query<(&InLayer, &import::Rect)>,
-    windows: Res<Windows>,
-    camera_q: Query<(&GlobalTransform, &Camera), Without<CursorColliderDebug>>,
-) {
 }
 
 // sends event after 1 second

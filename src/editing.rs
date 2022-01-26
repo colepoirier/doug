@@ -68,7 +68,7 @@ pub fn hover_rect_system(
 /// hovers over it.
 pub fn highlight_shape_system(
     // We need all connectors the mouse hovers over.
-    mut q_hover: Query<(Entity, &mut DrawMode, &mut Transform), With<Hover>>,
+    mut q_hover: Query<(Entity, &mut DrawMode, &mut Transform), Changed<Hover>>,
     mut q2_hover: Query<(Entity, &mut DrawMode, &mut Transform), Without<Hover>>,
 ) {
     for (entity, mut draw, mut transform) in q_hover.iter_mut() {
@@ -76,10 +76,10 @@ pub fn highlight_shape_system(
             ref mut fill_mode, ..
         } = *draw
         {
-            fill_mode.color = Color::rgba(0.0, 0.0, 0.0, 1.0);
+            fill_mode.color = *fill_mode.color.set_a(1.0);
         }
-        // transform.scale.x = 1.2;
-        // transform.scale.y = 1.2;
+        transform.scale.x = 1.2;
+        transform.scale.y = 1.2;
         info!("highlight_shape_system is_hovered id: {:?}", entity);
     }
 
@@ -90,8 +90,8 @@ pub fn highlight_shape_system(
         {
             fill_mode.color = *fill_mode.color.set_a(ALPHA);
         }
-        // transform.scale.x = 1.0;
-        // transform.scale.y = 1.0;
+        transform.scale.x = 1.0;
+        transform.scale.y = 1.0;
         info!("highlight_shape_system not is_hovered id: {:?}", entity);
     }
 }
