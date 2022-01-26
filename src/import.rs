@@ -146,6 +146,7 @@ pub fn load_proto_lib_system(
 pub fn import_rect_system(
     mut commands: Commands,
     mut import_rect_event_reader: EventReader<ImportRectEvent>,
+    // mut rtree_shape_collect_event_writer: EventWriter<RTreeShapeImportEvent>
 ) {
     for ImportRectEvent { rect, layer, color } in import_rect_event_reader.iter() {
         let proto::Rectangle {

@@ -4,14 +4,16 @@ pub mod shapes;
 
 use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
+use bevy::input::mouse::{MouseMotion, MouseWheel};
 // use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseMotion, MouseScrollUnit, MouseWheel};
-use bevy::render::camera::{Camera, OrthographicProjection};
+use bevy::render::camera::Camera;
 use bevy::{prelude::*, render::camera::ScalingMode};
 
 use derive_more::{Deref, DerefMut};
 
 use bevy_prototype_lyon as lyon;
 use bevy_prototype_lyon::prelude::*;
+use editing::hover_rect_system;
 use import::{
     import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
     ImportPathEvent, ImportPolyEvent, ImportRectEvent,
@@ -156,6 +158,8 @@ fn main() {
         .add_system(cursor_instersect_system)
         .add_system(cursor_collider_debug_sync_system)
         .add_system(camera_changed_system)
+        .add_system(pan_zoom_camera_system)
+        .add_system(hover_rect_system)
         .run();
 }
 
@@ -196,6 +200,43 @@ fn setup_system(mut commands: Commands, windows: Res<Windows>) {
         ..Default::default()
     };
     commands.spawn_bundle(cursor_collider);
+}
+
+pub fn pan_zoom_camera_system(
+    mut ev_motion: EventReader<MouseMotion>,
+    mut ev_scroll: EventReader<MouseWheel>,
+    input_mouse: Res<Input<MouseButton>>,
+    input_keyboard: Res<Input<KeyCode>>,
+    mut q_camera: Query<&mut Transform, With<Camera>>,
+) {
+    // change input mapping for panning here.
+    let pan_button = MouseButton::Middle;
+    let pan_button2 = KeyCode::LControl;
+
+    let mut pan = Vec2::ZERO;
+    let mut scroll = 0.0;
+
+    if input_mouse.pressed(pan_button) || input_keyboard.pressed(pan_button2) {
+        for ev in ev_motion.iter() {
+            pan += ev.delta;
+        }
+    }
+
+    for ev in ev_scroll.iter() {
+        scroll += ev.y;
+    }
+
+    // assuming there is exacly one main camera entity, so this is ok.
+    if let Ok(mut transform) = q_camera.get_single_mut() {
+        if pan.length_squared() > 0.0 {
+            let scale = transform.scale.x;
+            transform.translation.x -= pan.x * scale;
+            transform.translation.y += pan.y * scale;
+        } else if scroll.abs() > 0.0 {
+            let scale = (transform.scale.x - scroll).clamp(1.0, 10.0);
+            transform.scale = Vec3::new(scale, scale, scale);
+        }
+    }
 }
 
 fn camera_changed_system(camera_q: Query<&Transform, (Changed<Transform>, With<Camera>)>) {
@@ -273,9 +314,6 @@ pub fn cursor_collider_debug_sync_system(
 
     let window = windows.get(cam.window).unwrap();
     let window_size = Vec2::new(window.width(), window.height());
-
-    let width = window.width();
-    let height = window.height();
 
     // Convert screen position [0..resolution] to ndc [-1..1]
     let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();

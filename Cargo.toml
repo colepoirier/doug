@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 num-traits = "0.2.14"
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 derive_more = "0.99.17"
 prost = "0.9.0"
 bevy_prototype_lyon = "0.4.0"
