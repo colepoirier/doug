@@ -1,10 +1,9 @@
 use crate::{
     shapes::{Path, Poly, Rect},
-    ALPHA,
+    InLayer, ALPHA,
 };
 use bevy::prelude::*;
-use bevy_prototype_lyon::prelude::{DrawMode, FillMode};
-use derive_more::{Deref, DerefMut};
+use bevy_prototype_lyon::prelude::DrawMode;
 
 /// Marker component to indicate that the mouse
 /// currently hovers over the given entity.
@@ -13,7 +12,7 @@ pub struct Hover;
 
 pub fn hover_rect_system(
     mut commands: Commands,
-    mut rect_q: Query<(Entity, &Rect, &mut DrawMode)>,
+    rect_q: Query<(Entity, &Rect, &InLayer)>,
     mut cursor_pos: EventReader<CursorMoved>,
     windows: Res<Windows>,
     camera_q: Query<(&Transform, &Camera)>,
@@ -32,7 +31,9 @@ pub fn hover_rect_system(
         let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
 
         let (x, y) = world_pos.truncate().into();
-        info!("hover_rect_system cursor pos x {} y {}", x, y);
+
+        let mut top_shape: (u16, Option<Entity>) = (0, None);
+
         for (
             entity,
             &Rect {
@@ -40,26 +41,25 @@ pub fn hover_rect_system(
                 height,
                 origin,
             },
-            mut draw,
-        ) in rect_q.iter_mut()
+            layer,
+        ) in rect_q.iter()
         {
             let x_min = origin.x;
             let x_max = origin.x + (width as i32);
             let y_min = origin.y;
             let y_max = origin.y + (height as i32);
-            // info!(
-            //     "hover_rect_system rect dims x_min {} x_max {}  y_min {} y_max {}",
-            //     x_min, x_max, y_min, y_max
-            // );
-            if (x_min < (x.round() as i32) && (x.round() as i32) < x_max)
-                && (y_min < (y.round() as i32) && (y.round() as i32) < y_max)
+
+            if (x_min <= (x.round() as i32) && (x.round() as i32) <= x_max)
+                && (y_min <= (y.round() as i32) && (y.round() as i32) <= y_max)
+                && **layer >= top_shape.0
             {
-                commands.entity(entity).insert(Hover);
-                info!("hover_rect_system is_hovered id: {:?}, dims: x_min {} x_max {}  y_min {} y_max {}", entity, x_min, x_max, y_min, y_max);
+                top_shape = (**layer, Some(entity));
             } else {
                 commands.entity(entity).remove::<Hover>();
-                info!("hover_rect_system no longer is_hovered id: {:?}, dims: x_min {} x_max {}  y_min {} y_max {}", entity, x_min, x_max, y_min, y_max);
             }
+        }
+        if let Some(e) = top_shape.1 {
+            commands.entity(e).insert(Hover);
         }
     }
 }
@@ -68,31 +68,25 @@ pub fn hover_rect_system(
 /// hovers over it.
 pub fn highlight_shape_system(
     // We need all connectors the mouse hovers over.
-    mut q_hover: Query<(Entity, &mut DrawMode, &mut Transform), Changed<Hover>>,
-    mut q2_hover: Query<(Entity, &mut DrawMode, &mut Transform), Without<Hover>>,
+    mut q_hover: Query<&mut DrawMode, Changed<Hover>>,
+    mut q2_hover: Query<&mut DrawMode, Without<Hover>>,
 ) {
-    for (entity, mut draw, mut transform) in q_hover.iter_mut() {
+    for mut draw in q_hover.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
         {
             fill_mode.color = *fill_mode.color.set_a(1.0);
         }
-        transform.scale.x = 1.2;
-        transform.scale.y = 1.2;
-        info!("highlight_shape_system is_hovered id: {:?}", entity);
     }
 
-    for (entity, mut draw, mut transform) in q2_hover.iter_mut() {
+    for mut draw in q2_hover.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
         {
             fill_mode.color = *fill_mode.color.set_a(ALPHA);
         }
-        transform.scale.x = 1.0;
-        transform.scale.y = 1.0;
-        info!("highlight_shape_system not is_hovered id: {:?}", entity);
     }
 }
 

@@ -91,7 +91,7 @@ pub fn load_proto_lib_system(
             }
 
             for poly in layer_shapes.polygons.iter() {
-                let proto::Polygon { vertices, net } = poly;
+                let proto::Polygon { vertices, .. } = poly;
 
                 viewport.update(&vertices.iter().fold(
                     ViewportDimensions::default(),
@@ -112,7 +112,7 @@ pub fn load_proto_lib_system(
             }
 
             for path in layer_shapes.paths.iter() {
-                let proto::Path { points, width, net } = path;
+                let proto::Path { points, .. } = path;
 
                 viewport.update(&points.iter().fold(
                     ViewportDimensions::default(),

@@ -19,7 +19,7 @@ use import::{
     ImportPathEvent, ImportPolyEvent, ImportRectEvent,
 };
 use lyon::plugin::ShapePlugin;
-use lyon::prelude::{DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions};
+// use lyon::prelude::{DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions};
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.1;
@@ -92,7 +92,7 @@ pub struct LayerBundle {
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct LayerColor(pub Color);
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Deref, DerefMut)]
 pub struct InLayer(pub u16);
 
 impl Default for InLayer {
@@ -165,15 +165,17 @@ fn main() {
         .run();
 }
 
-fn setup_system(mut commands: Commands, windows: Res<Windows>) {
+fn setup_system(
+    mut commands: Commands,
+    // windows: Res<Windows>
+) {
     let mut camera = OrthographicCameraBundle::new_2d();
     camera.orthographic_projection.scaling_mode = ScalingMode::WindowSize;
-
-    let window = windows.get_primary().unwrap();
-    let width = window.width();
-    let height = window.height();
-
     commands.spawn_bundle(camera);
+
+    // let window = windows.get_primary().unwrap();
+    // let width = window.width();
+    // let height = window.height();
 
     // let rect = lyon::shapes::Circle {
     //     radius: 20.0,
@@ -282,30 +284,30 @@ pub fn update_camera_viewport_system(
     }
 }
 
-pub fn cursor_collider_debug_sync_system(
-    mut cursor_moved_events: EventReader<CursorMoved>,
-    // mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
-    windows: Res<Windows>,
-    // camera_q: Query<(&Transform, &Camera), Without<CursorColliderDebug>>,
-) {
-    // let mut shape_pos = cursor_q.single_mut();
-    // let (cam_t, cam) = camera_q.single();
+// pub fn cursor_collider_debug_sync_system(
+//     mut cursor_moved_events: EventReader<CursorMoved>,
+//     mut cursor_q: Query<&mut Transform, With<CursorColliderDebug>>,
+//     windows: Res<Windows>,
+//     camera_q: Query<(&Transform, &Camera), Without<CursorColliderDebug>>,
+// ) {
+//     let mut shape_pos = cursor_q.single_mut();
+//     let (cam_t, cam) = camera_q.single();
 
-    // let window = windows.get(cam.window).unwrap();
-    // let window_size = Vec2::new(window.width(), window.height());
+//     let window = windows.get(cam.window).unwrap();
+//     let window_size = Vec2::new(window.width(), window.height());
 
-    // // Convert screen position [0..resolution] to ndc [-1..1]
-    // let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
+//     // Convert screen position [0..resolution] to ndc [-1..1]
+//     let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
 
-    // if let Some(&CursorMoved { position, .. }) = cursor_moved_events.iter().last() {
-    //     let ndc = (Vec2::new(position.x, position.y) / window_size) * 2.0 - Vec2::ONE;
-    //     let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-    //     world_pos.truncate();
+//     if let Some(&CursorMoved { position, .. }) = cursor_moved_events.iter().last() {
+//         let ndc = (Vec2::new(position.x, position.y) / window_size) * 2.0 - Vec2::ONE;
+//         let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+//         world_pos.truncate();
 
-    //     shape_pos.translation.x = world_pos.x;
-    //     shape_pos.translation.y = world_pos.y;
-    // }
-}
+//         shape_pos.translation.x = world_pos.x;
+//         shape_pos.translation.y = world_pos.y;
+//     }
+// }
 
 pub fn get_components_for_entity<'a>(
     entity: Entity,

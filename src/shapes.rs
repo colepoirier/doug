@@ -1,7 +1,6 @@
 use crate::{InLayer, Nom};
 use bevy::prelude::{Bundle, Component, IVec2};
 use bevy_prototype_lyon::entity;
-use derive_more::{Deref, DerefMut};
 use layout21::protos::Point;
 
 #[derive(Component, Default, Bundle)]
