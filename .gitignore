@@ -5,4 +5,5 @@
 *.zst
 dictionary
 *.dict
+.cargo/*
 config.toml
