@@ -10,14 +10,13 @@ use bevy::{prelude::*, render::camera::ScalingMode};
 
 use derive_more::{Deref, DerefMut};
 
-use bevy_prototype_lyon as lyon;
+use bevy_prototype_lyon::plugin::ShapePlugin;
 
-use editing::{highlight_shape_system, hover_rect_system};
+use editing::{highlight_shape_system, hover_path_system, hover_poly_system, hover_rect_system};
 use import::{
     import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
     ImportPathEvent, ImportPolyEvent, ImportRectEvent,
 };
-use lyon::plugin::ShapePlugin;
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.1;
@@ -107,18 +106,6 @@ impl Default for InLayer {
 )]
 pub struct LayerNum(pub u16);
 
-struct EventTriggerState {
-    event_timer: Timer,
-}
-
-impl Default for EventTriggerState {
-    fn default() -> Self {
-        EventTriggerState {
-            event_timer: Timer::from_seconds(0.001, true),
-        }
-    }
-}
-
 fn main() {
     App::new()
         .add_event::<LoadProtoEvent>()
@@ -135,15 +122,14 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(LayerColors::default())
-        .init_resource::<EventTriggerState>()
         .insert_resource(ViewportDimensions::default())
         .insert_resource(CursorWorldPos::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
         .add_stage("import", SystemStage::parallel())
         .add_stage_after("import", "update_viewport", SystemStage::parallel())
-        .add_system(event_trigger_system)
         .add_startup_system(setup_system)
+        .add_startup_system(send_import_event_system)
         .add_system(load_proto_lib_system)
         .add_system(import_path_system)
         .add_system(import_rect_system)
@@ -152,14 +138,13 @@ fn main() {
         .add_system(camera_changed_system)
         .add_system(pan_zoom_camera_system)
         .add_system(hover_rect_system)
+        .add_system(hover_poly_system)
+        .add_system(hover_path_system)
         .add_system(highlight_shape_system)
         .run();
 }
 
-fn setup_system(
-    mut commands: Commands,
-    // windows: Res<Windows>
-) {
+fn setup_system(mut commands: Commands) {
     let mut camera = OrthographicCameraBundle::new_2d();
     camera.orthographic_projection.scaling_mode = ScalingMode::WindowSize;
     commands.spawn_bundle(camera);
@@ -279,19 +264,9 @@ pub fn get_components_for_entity<'a>(
     None
 }
 
-// sends event after 1 second
-fn event_trigger_system(
-    time: Res<Time>,
-    mut state: ResMut<EventTriggerState>,
-    mut my_events: EventWriter<LoadProtoEvent>,
-) {
-    state.event_timer.tick(time.delta());
-    let timer = &mut state.event_timer;
-    if timer.finished() && !timer.paused() {
-        my_events.send(LoadProtoEvent {
-            lib: "./models/dff1_lib.proto".into(),
-            // "./models/oscibear.proto",
-        });
-        timer.pause()
-    }
+fn send_import_event_system(mut my_events: EventWriter<LoadProtoEvent>) {
+    my_events.send(LoadProtoEvent {
+        lib: "./models/dff1_lib.proto".into(),
+        // "./models/oscibear.proto",
+    });
 }

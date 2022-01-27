@@ -10,7 +10,8 @@ anyhow = "1.0.53"
 derive_more = "0.99.17"
 prost = "0.9.0"
 bevy_prototype_lyon = "0.4.0"
-bevy-inspector-egui = "0.7.5"
+bevy-inspector-egui = "0.7.6"
+lyon_algorithms = "0.17.7"
 layout21 = { git = "https://github.com/dan-fritchman/Layout21.git" }
 
 [dependencies.bevy]

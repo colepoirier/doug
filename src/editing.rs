@@ -1,9 +1,12 @@
 use crate::{
-    shapes::{Path, Poly, Rect},
+    shapes,
+    shapes::{Poly, Rect},
     CursorWorldPos, InLayer, ALPHA,
 };
 use bevy::prelude::*;
-use bevy_prototype_lyon::prelude::DrawMode;
+use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path};
+
+use lyon_algorithms::hit_test::hit_test_path;
 
 /// Marker component to indicate that the mouse
 /// currently hovers over the given entity.
@@ -12,7 +15,7 @@ pub struct Hover;
 
 pub fn hover_rect_system(
     mut commands: Commands,
-    rect_q: Query<(Entity, &Rect, &InLayer)>,
+    rect_q: Query<(Entity, &Path, &InLayer), With<Rect>>,
     cursor_pos: Res<CursorWorldPos>,
 ) {
     let x = cursor_pos.x;
@@ -20,22 +23,14 @@ pub fn hover_rect_system(
 
     let mut top_shape: (u16, Option<Entity>) = (0, None);
 
-    for (
-        entity,
-        &Rect {
-            width,
-            height,
-            origin,
-        },
-        layer,
-    ) in rect_q.iter()
-    {
-        let x_min = origin.x;
-        let x_max = origin.x + (width as i32);
-        let y_min = origin.y;
-        let y_max = origin.y + (height as i32);
-
-        if (x_min <= x && x <= x_max) && (y_min <= y && y <= y_max) && **layer >= top_shape.0 {
+    for (entity, path, layer) in rect_q.iter() {
+        if hit_test_path(
+            &(x as f32, y as f32).into(),
+            path.0.into_iter(),
+            FillRule::NonZero,
+            10.0,
+        ) && **layer >= top_shape.0
+        {
             top_shape = (**layer, Some(entity));
         } else {
             commands.entity(entity).remove::<Hover>();
@@ -43,6 +38,62 @@ pub fn hover_rect_system(
     }
     if let Some(e) = top_shape.1 {
         commands.entity(e).insert(Hover);
+    }
+}
+
+pub fn hover_poly_system(
+    mut commands: Commands,
+    poly_q: Query<(Entity, &Path, &InLayer), With<Poly>>,
+    cursor_pos: Res<CursorWorldPos>,
+) {
+    let x = cursor_pos.x;
+    let y = cursor_pos.y;
+
+    let mut top_shape: (u16, Option<Entity>) = (0, None);
+
+    for (entity, path, layer) in poly_q.iter() {
+        if hit_test_path(
+            &(x as f32, y as f32).into(),
+            path.0.into_iter(),
+            FillRule::NonZero,
+            10.0,
+        ) && **layer >= top_shape.0
+        {
+            top_shape = (**layer, Some(entity));
+        } else {
+            commands.entity(entity).remove::<Hover>();
+        }
+        if let Some(e) = top_shape.1 {
+            commands.entity(e).insert(Hover);
+        }
+    }
+}
+
+pub fn hover_path_system(
+    mut commands: Commands,
+    path_q: Query<(Entity, &Path, &InLayer), With<shapes::Path>>,
+    cursor_pos: Res<CursorWorldPos>,
+) {
+    let x = cursor_pos.x;
+    let y = cursor_pos.y;
+
+    let mut top_shape: (u16, Option<Entity>) = (0, None);
+
+    for (entity, path, layer) in path_q.iter() {
+        if hit_test_path(
+            &(x as f32, y as f32).into(),
+            path.0.into_iter(),
+            FillRule::NonZero,
+            10.0,
+        ) && **layer >= top_shape.0
+        {
+            top_shape = (**layer, Some(entity));
+        } else {
+            commands.entity(entity).remove::<Hover>();
+        }
+        if let Some(e) = top_shape.1 {
+            commands.entity(e).insert(Hover);
+        }
     }
 }
 
@@ -71,10 +122,6 @@ pub fn highlight_shape_system(
         }
     }
 }
-
-pub fn hover_poly_system(poly_q: Query<&Poly>, cursor_pos: Res<CursorWorldPos>) {}
-
-pub fn hover_path_system(path_q: Query<&Path>, cursor_pos: Res<CursorWorldPos>) {}
 
 // #[derive(Component)]
 // pub enum RectSelection {
