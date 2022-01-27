@@ -54,6 +54,8 @@ pub fn hover_rect_system(
             10.0,
         ) && layer >= top_shape.layer
         {
+            info!("Shape {:?} is currently hovered.", entity);
+
             *top_shape = TopShape {
                 layer,
                 shape: Some(entity),
@@ -86,6 +88,8 @@ pub fn hover_poly_system(
             10.0,
         ) && layer >= top_shape.layer
         {
+            info!("Shape {:?} is currently hovered.", entity);
+
             *top_shape = TopShape {
                 layer,
                 shape: Some(entity),
@@ -118,6 +122,8 @@ pub fn hover_path_system(
             10.0,
         ) && layer >= top_shape.layer
         {
+            info!("Shape {:?} is currently hovered.", entity);
+
             *top_shape = TopShape {
                 layer,
                 shape: Some(entity),
