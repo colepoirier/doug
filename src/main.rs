@@ -12,7 +12,9 @@ use derive_more::{Deref, DerefMut};
 
 use bevy_prototype_lyon::plugin::ShapePlugin;
 
-use editing::{highlight_shape_system, hover_path_system, hover_poly_system, hover_rect_system};
+use editing::{
+    highlight_shape_system, hover_path_system, hover_poly_system, hover_rect_system, TopShape,
+};
 use import::{
     import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
     ImportPathEvent, ImportPolyEvent, ImportRectEvent,
@@ -124,6 +126,7 @@ fn main() {
         .insert_resource(LayerColors::default())
         .insert_resource(ViewportDimensions::default())
         .insert_resource(CursorWorldPos::default())
+        .insert_resource(TopShape::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
         .add_stage("import", SystemStage::parallel())
