@@ -1,3 +1,7 @@
 /target
 *.proto
 *.gds
+*.bin
+*.zst
+dictionary
+*.dict
