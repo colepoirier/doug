@@ -72,6 +72,9 @@ impl ViewportDimensions {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
+pub struct CursorWorldPos(pub IVec2);
+
 #[derive(Component, Debug, Default, Clone)]
 pub struct LoadProtoEvent {
     lib: String,
@@ -146,6 +149,7 @@ fn main() {
         .insert_resource(LayerColors::default())
         .init_resource::<EventTriggerState>()
         .insert_resource(ViewportDimensions::default())
+        .insert_resource(CursorWorldPos::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
         .add_stage("import", SystemStage::parallel())
@@ -308,6 +312,30 @@ pub fn update_camera_viewport_system(
 //         shape_pos.translation.y = world_pos.y;
 //     }
 // }
+
+pub fn cursor_world_pos_system(
+    mut cursor_moved_events: EventReader<CursorMoved>,
+    mut cursor_world_pos: ResMut<CursorWorldPos>,
+    windows: Res<Windows>,
+    camera_q: Query<(&Transform, &Camera)>,
+) {
+    let (cam_t, cam) = camera_q.single();
+
+    let window = windows.get(cam.window).unwrap();
+    let window_size = Vec2::new(window.width(), window.height());
+
+    // Convert screen position [0..resolution] to ndc [-1..1]
+    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
+
+    if let Some(&CursorMoved { position, .. }) = cursor_moved_events.iter().last() {
+        let ndc = (Vec2::new(position.x, position.y) / window_size) * 2.0 - Vec2::ONE;
+        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+        world_pos.truncate();
+
+        cursor_world_pos.x = world_pos.x.round() as i32;
+        cursor_world_pos.y = world_pos.y.round() as i32;
+    }
+}
 
 pub fn get_components_for_entity<'a>(
     entity: Entity,
