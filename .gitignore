@@ -5,3 +5,4 @@
 *.zst
 dictionary
 *.dict
+config.toml
