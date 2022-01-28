@@ -7,13 +7,14 @@ use bevy::prelude::*;
 use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path};
 
 use lyon_algorithms::hit_test::hit_test_path;
+use lyon_geom::Translation;
 
 /// Marker component to indicate that the mouse
 /// currently hovers over the given entity.
 #[derive(Component)]
 pub struct Hover;
 
-#[derive(Component, Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct TopShape {
     pub layer: u16,
     pub shape: Option<Entity>,
@@ -35,115 +36,93 @@ impl PartialOrd for TopShape {
     }
 }
 
-pub fn hover_rect_system(
+pub fn hover_shape_system(
     mut commands: Commands,
-    mut top_shape: ResMut<TopShape>,
-    rect_q: Query<(Entity, &Path, &InLayer), With<Rect>>,
     cursor_pos: Res<CursorWorldPos>,
+    rect_q: Query<(Entity, &Path, &Transform, &InLayer), With<Rect>>,
+    poly_q: Query<(Entity, &Path, &Transform, &InLayer), With<Poly>>,
+    path_q: Query<(Entity, &Path, &Transform, &InLayer), With<shapes::Path>>,
+    hover_q: Query<Entity, With<Hover>>,
 ) {
-    let x = cursor_pos.x;
-    let y = cursor_pos.y;
+    let mut top_shape = TopShape::default();
 
-    for (entity, path, layer) in rect_q.iter() {
+    let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
+
+    for (entity, path, transform, layer) in rect_q.iter() {
         let layer = **layer;
 
-        if hit_test_path(
-            &(x as f32, y as f32).into(),
-            path.0.into_iter(),
-            FillRule::NonZero,
-            10.0,
-        ) && layer >= top_shape.layer
-        {
-            info!("Shape {:?} is currently hovered.", entity);
+        let path = path.0.clone().transformed(&Translation::new(
+            transform.translation.x,
+            transform.translation.y,
+        ));
+        let shape = TopShape {
+            layer,
+            shape: Some(entity),
+        };
 
-            *top_shape = TopShape {
-                layer,
-                shape: Some(entity),
-            };
+        if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
+            top_shape = shape;
         } else {
             commands.entity(entity).remove::<Hover>();
         }
     }
+
+    for (entity, path, transform, layer) in poly_q.iter() {
+        let layer = **layer;
+
+        let path = path.0.clone().transformed(&Translation::new(
+            transform.translation.x,
+            transform.translation.y,
+        ));
+
+        let shape = TopShape {
+            layer,
+            shape: Some(entity),
+        };
+
+        if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
+            top_shape = shape;
+        } else {
+            commands.entity(entity).remove::<Hover>();
+        }
+    }
+
+    for (entity, path, transform, layer) in path_q.iter() {
+        let layer = **layer;
+
+        let path = path.0.clone().transformed(&Translation::new(
+            transform.translation.x,
+            transform.translation.y,
+        ));
+
+        let shape = TopShape {
+            layer,
+            shape: Some(entity),
+        };
+
+        if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
+            top_shape = shape;
+        } else {
+            commands.entity(entity).remove::<Hover>();
+        }
+    }
+
     if let Some(e) = top_shape.shape {
         commands.entity(e).insert(Hover);
-    }
-}
-
-pub fn hover_poly_system(
-    mut commands: Commands,
-    mut top_shape: ResMut<TopShape>,
-    poly_q: Query<(Entity, &Path, &InLayer), With<Poly>>,
-    cursor_pos: Res<CursorWorldPos>,
-) {
-    let x = cursor_pos.x;
-    let y = cursor_pos.y;
-
-    for (entity, path, layer) in poly_q.iter() {
-        let layer = **layer;
-
-        if hit_test_path(
-            &(x as f32, y as f32).into(),
-            path.0.into_iter(),
-            FillRule::NonZero,
-            10.0,
-        ) && layer >= top_shape.layer
-        {
-            info!("Shape {:?} is currently hovered.", entity);
-
-            *top_shape = TopShape {
-                layer,
-                shape: Some(entity),
-            };
-        } else {
-            commands.entity(entity).remove::<Hover>();
-        }
-        if let Some(e) = top_shape.shape {
-            commands.entity(e).insert(Hover);
-        }
-    }
-}
-
-pub fn hover_path_system(
-    mut commands: Commands,
-    mut top_shape: ResMut<TopShape>,
-    path_q: Query<(Entity, &Path, &InLayer), With<shapes::Path>>,
-    cursor_pos: Res<CursorWorldPos>,
-) {
-    let x = cursor_pos.x;
-    let y = cursor_pos.y;
-
-    for (entity, path, layer) in path_q.iter() {
-        let layer = **layer;
-
-        if hit_test_path(
-            &(x as f32, y as f32).into(),
-            path.0.into_iter(),
-            FillRule::NonZero,
-            10.0,
-        ) && layer >= top_shape.layer
-        {
-            info!("Shape {:?} is currently hovered.", entity);
-
-            *top_shape = TopShape {
-                layer,
-                shape: Some(entity),
-            };
-        } else {
-            commands.entity(entity).remove::<Hover>();
-        }
-        if let Some(e) = top_shape.shape {
-            commands.entity(e).insert(Hover);
+    } else {
+        for e in hover_q.iter() {
+            commands.entity(e).remove::<Hover>();
         }
     }
 }
 
 /// Highlight a shape by making it more opaque when the mouse hovers over it.
-pub fn highlight_shape_system(
+pub fn highlight_hovered_system(
     // We need all shapes the mouse hovers over.
-    mut q_hover: Query<&mut DrawMode, Changed<Hover>>,
-    mut q2_hover: Query<&mut DrawMode, Without<Hover>>,
+    mut hover_q: Query<&mut DrawMode, Changed<Hover>>,
+    mut no_hover_q: Query<&mut DrawMode, Without<Hover>>,
 ) {
-    for mut draw in q_hover.iter_mut() {
+    for mut draw in hover_q.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
@@ -152,7 +131,7 @@ pub fn highlight_shape_system(
         }
     }
 
-    for mut draw in q2_hover.iter_mut() {
+    for mut draw in no_hover_q.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw

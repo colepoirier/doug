@@ -12,9 +12,7 @@ use derive_more::{Deref, DerefMut};
 
 use bevy_prototype_lyon::plugin::ShapePlugin;
 
-use editing::{
-    highlight_shape_system, hover_path_system, hover_poly_system, hover_rect_system, TopShape,
-};
+use editing::{highlight_hovered_system, hover_shape_system};
 use import::{
     import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
     ImportPathEvent, ImportPolyEvent, ImportRectEvent,
@@ -126,7 +124,6 @@ fn main() {
         .insert_resource(LayerColors::default())
         .insert_resource(ViewportDimensions::default())
         .insert_resource(CursorWorldPos::default())
-        .insert_resource(TopShape::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(ShapePlugin)
         .add_stage("import", SystemStage::parallel())
@@ -140,10 +137,9 @@ fn main() {
         .add_system(update_camera_viewport_system)
         .add_system(camera_changed_system)
         .add_system(pan_zoom_camera_system)
-        .add_system(hover_rect_system)
-        .add_system(hover_poly_system)
-        .add_system(hover_path_system)
-        .add_system(highlight_shape_system)
+        .add_system(cursor_world_pos_system)
+        .add_system(hover_shape_system)
+        .add_system(highlight_hovered_system)
         .run();
 }
 
@@ -157,17 +153,15 @@ pub fn pan_zoom_camera_system(
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
     input_mouse: Res<Input<MouseButton>>,
-    input_keyboard: Res<Input<KeyCode>>,
     mut q_camera: Query<&mut Transform, With<Camera>>,
 ) {
     // change input mapping for panning here.
-    let pan_button = MouseButton::Middle;
-    let pan_button2 = KeyCode::LControl;
+    let pan_button = MouseButton::Left;
 
     let mut pan = Vec2::ZERO;
     let mut scroll = 0.0;
 
-    if input_mouse.pressed(pan_button) || input_keyboard.pressed(pan_button2) {
+    if input_mouse.pressed(pan_button) {
         for ev in ev_motion.iter() {
             pan += ev.delta;
         }
