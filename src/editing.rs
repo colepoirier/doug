@@ -127,7 +127,7 @@ pub fn highlight_hovered_system(
             ref mut fill_mode, ..
         } = *draw
         {
-            fill_mode.color = *fill_mode.color.set_a(1.0);
+            fill_mode.color = *fill_mode.color.set_a(0.5);
         }
     }
 
