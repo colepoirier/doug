@@ -10,7 +10,7 @@ use bevy::{prelude::*, render::camera::ScalingMode};
 
 use derive_more::{Deref, DerefMut};
 
-use bevy_framepace::{FramepacePlugin, FramerateLimit};
+// use bevy_framepace::{FramepacePlugin, FramerateLimit};
 
 use editing::EditingPlugin;
 use import::Layout21ImportPlugin;
@@ -92,12 +92,12 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(Layout21ImportPlugin)
         .add_plugin(EditingPlugin)
-        .add_plugin(FramepacePlugin {
-            enabled: true,
-            framerate_limit: FramerateLimit::Manual(30),
-            warn_on_frame_drop: true,
-            ..Default::default()
-        })
+        // .add_plugin(FramepacePlugin {
+        //     enabled: true,
+        //     framerate_limit: FramerateLimit::Manual(30),
+        //     warn_on_frame_drop: true,
+        //     ..Default::default()
+        // })
         .add_startup_system(setup_system)
         .add_system(update_camera_viewport_system)
         .add_system(camera_changed_system)
@@ -137,9 +137,9 @@ pub fn pan_zoom_camera_system(
     // assuming there is exacly one main camera entity, so this is ok.
     if let Ok(mut transform) = q_camera.get_single_mut() {
         if pan.length_squared() > 0.0 {
-            // let scale = transform.scale.x;
-            transform.translation.x -= pan.x;
-            transform.translation.y += pan.y;
+            let scale = transform.scale.x;
+            transform.translation.x -= pan.x * scale / 4.0;
+            transform.translation.y += pan.y * scale / 4.0;
         } else if scroll.abs() > 0.0 {
             let scale = (transform.scale.x - scroll).clamp(1.0, 10.0);
             transform.scale = Vec3::new(scale, scale, scale);

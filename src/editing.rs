@@ -28,9 +28,11 @@ impl Plugin for EditingPlugin {
                 SystemStage::parallel(),
             )
             .add_system_to_stage("detect_hover", cursor_hover_system)
+            .add_system_to_stage("detect_hover", debug_hovered_system)
             .add_system_to_stage("highlight_hovered", highlight_hovered_system)
             .add_system_to_stage("detect_clicked", select_clicked_system)
-            .add_system_to_stage("highlight_selected", highlight_selected_sytem);
+            .add_system_to_stage("highlight_selected", highlight_selected_sytem)
+            .add_system_to_stage("highlight_selected", unhighlight_deselected_system);
     }
 }
 
@@ -73,7 +75,6 @@ pub fn cursor_hover_system(
     rect_q: Query<(Entity, &Path, &Transform, &InLayer), With<Rect>>,
     poly_q: Query<(Entity, &Path, &Transform, &InLayer), With<Poly>>,
     path_q: Query<(Entity, &Path, &Transform, &InLayer), With<shapes::Path>>,
-    hover_q: Query<Entity, With<Hovered>>,
 ) {
     let mut top_shape = TopShape::default();
 
@@ -138,22 +139,27 @@ pub fn cursor_hover_system(
         }
     }
 
+    info!("{:?}", top_shape);
+
     if let Some(e) = top_shape.shape {
         commands.entity(e).insert(Hovered);
-    } else {
-        for e in hover_q.iter() {
-            commands.entity(e).remove::<Hovered>();
-        }
+    }
+}
+
+pub fn debug_hovered_system(hovered_q: Query<Entity, Changed<Hovered>>) {
+    for hovered in hovered_q.iter() {
+        info!("{:?} became Hovered", hovered);
     }
 }
 
 /// Highlight a shape by making it more opaque when the mouse hovers over it.
 pub fn highlight_hovered_system(
     // We need all shapes the mouse hovers over.
-    mut hover_q: Query<&mut DrawMode, Changed<Hovered>>,
-    mut no_hover_q: Query<&mut DrawMode, Without<Hovered>>,
+    mut hovered_q: Query<&mut DrawMode, Added<Hovered>>,
+    mut shape_q: Query<&mut DrawMode, Without<Hovered>>,
+    removed_hover: RemovedComponents<Hovered>,
 ) {
-    for mut draw in hover_q.iter_mut() {
+    for mut draw in hovered_q.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
@@ -162,7 +168,8 @@ pub fn highlight_hovered_system(
         }
     }
 
-    for mut draw in no_hover_q.iter_mut() {
+    for entity in removed_hover.iter() {
+        let mut draw = shape_q.get_mut(entity).unwrap();
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
@@ -174,18 +181,19 @@ pub fn highlight_hovered_system(
 
 pub fn select_clicked_system(
     mut commands: Commands,
-    hover_q: Query<Entity, With<Hovered>>,
+    hovered_q: Query<Entity, With<Hovered>>,
     selected_q: Query<Entity, With<Selected>>,
     mouse_click: Res<Input<MouseButton>>,
 ) {
-    for hovered in hover_q.iter() {
-        if mouse_click.pressed(MouseButton::Left) {
-            if let Ok(clicked_selected) = selected_q.get(hovered) {
-                info!("{:?} was clicked while already selected", hovered);
-                commands.entity(clicked_selected).remove::<Selected>();
+    if mouse_click.just_pressed(MouseButton::Left) {
+        for selected in selected_q.iter() {
+            commands.entity(selected).remove::<Selected>();
+        }
+        for hovered in hovered_q.iter() {
+            if selected_q.get(hovered).is_ok() {
+                commands.entity(hovered).remove::<Selected>();
             } else {
                 commands.entity(hovered).insert(Selected);
-                info!("{:?} was clicked while not yet selected", hovered);
             }
         }
     }
@@ -194,11 +202,9 @@ pub fn select_clicked_system(
 /// Highlight a shape by making it more opaque when the mouse hovers over it.
 pub fn highlight_selected_sytem(
     // We need all shapes the mouse hovers over.
-    mut selected_q: Query<&mut DrawMode, With<Selected>>,
-    mut shape_q: Query<&mut DrawMode, Without<Selected>>,
-    deselected: RemovedComponents<Selected>,
+    mut curr_selected_q: Query<&mut DrawMode, With<Selected>>,
 ) {
-    for mut draw in selected_q.iter_mut() {
+    for mut draw in curr_selected_q.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
@@ -206,14 +212,23 @@ pub fn highlight_selected_sytem(
             fill_mode.color = *fill_mode.color.set_a(0.75);
         }
     }
+}
 
+pub fn unhighlight_deselected_system(
+    query: Query<Entity>,
+    mut draw_q: Query<&mut DrawMode>,
+    deselected: RemovedComponents<Selected>,
+) {
     for entity in deselected.iter() {
-        let mut draw = shape_q.get_mut(entity).unwrap();
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
-        } = *draw
+        } = *draw_q.get_mut(entity).unwrap()
         {
-            fill_mode.color = *fill_mode.color.set_a(ALPHA);
+            if query.get_component::<Hovered>(entity).is_ok() {
+                fill_mode.color = *fill_mode.color.set_a(0.5);
+            } else {
+                fill_mode.color = *fill_mode.color.set_a(ALPHA);
+            }
         }
     }
 }
