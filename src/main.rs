@@ -137,7 +137,7 @@ pub fn pan_zoom_camera_system(
     // assuming there is exacly one main camera entity, so this is ok.
     if let Ok(mut transform) = q_camera.get_single_mut() {
         if pan.length_squared() > 0.0 {
-            let scale = transform.scale.x;
+            // let scale = transform.scale.x;
             transform.translation.x -= pan.x;
             transform.translation.y += pan.y;
         } else if scroll.abs() > 0.0 {
