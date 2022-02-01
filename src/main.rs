@@ -12,6 +12,8 @@ use derive_more::{Deref, DerefMut};
 
 // use bevy_framepace::{FramepacePlugin, FramerateLimit};
 
+use bevy_inspector_egui::WorldInspectorPlugin;
+
 use editing::EditingPlugin;
 use import::Layout21ImportPlugin;
 
@@ -98,6 +100,7 @@ fn main() {
         //     warn_on_frame_drop: true,
         //     ..Default::default()
         // })
+        .add_plugin(WorldInspectorPlugin::default())
         .add_startup_system(setup_system)
         .add_system(update_camera_viewport_system)
         .add_system(camera_changed_system)

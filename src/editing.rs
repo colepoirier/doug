@@ -29,6 +29,7 @@ impl Plugin for EditingPlugin {
             )
             .add_system_to_stage("detect_hover", cursor_hover_system)
             .add_system_to_stage("detect_hover", debug_hovered_system)
+            .add_system_to_stage("detect_hover", debug_selected_system)
             .add_system_to_stage("highlight_hovered", highlight_hovered_system)
             .add_system_to_stage("detect_clicked", select_clicked_system)
             .add_system_to_stage("highlight_selected", highlight_selected_sytem)
@@ -139,16 +140,36 @@ pub fn cursor_hover_system(
         }
     }
 
-    info!("{:?}", top_shape);
+    // info!("{:?}", top_shape);
 
     if let Some(e) = top_shape.shape {
         commands.entity(e).insert(Hovered);
     }
 }
 
-pub fn debug_hovered_system(hovered_q: Query<Entity, Changed<Hovered>>) {
+pub fn debug_hovered_system(
+    hovered_q: Query<Entity, Added<Hovered>>,
+    selected_q: Query<Entity, Added<Selected>>,
+    hovered_removed: RemovedComponents<Hovered>,
+    selected_removed: RemovedComponents<Selected>,
+) {
     for hovered in hovered_q.iter() {
         info!("{:?} became Hovered", hovered);
+    }
+    for selected in selected_q.iter() {
+        info!("{:?} became Selected", selected);
+    }
+    for unhovered in hovered_removed.iter() {
+        info!("{:?} became Un-Hovered", unhovered);
+    }
+    for deselected in selected_removed.iter() {
+        info!("{:?} became De-Selected", deselected);
+    }
+}
+
+pub fn debug_selected_system(hovered_q: Query<Entity, Added<Selected>>) {
+    for hovered in hovered_q.iter() {
+        info!("{:?} became Selected", hovered);
     }
 }
 
