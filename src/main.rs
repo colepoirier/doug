@@ -10,13 +10,10 @@ use bevy::{prelude::*, render::camera::ScalingMode};
 
 use derive_more::{Deref, DerefMut};
 
-use bevy_prototype_lyon::plugin::ShapePlugin;
+use bevy_framepace::{FramepacePlugin, FramerateLimit};
 
-use editing::{highlight_hovered_system, hover_shape_system};
-use import::{
-    import_path_system, import_poly_system, import_rect_system, load_proto_lib_system,
-    ImportPathEvent, ImportPolyEvent, ImportRectEvent,
-};
+use editing::EditingPlugin;
+use import::Layout21ImportPlugin;
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.1;
@@ -28,30 +25,6 @@ pub const DEFAULT_UNITS: f32 = 10e-9;
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Nom(String);
 
-#[derive(Component, Debug)]
-pub struct LayerColors {
-    colors: std::iter::Cycle<std::vec::IntoIter<Color>>,
-}
-
-impl Default for LayerColors {
-    fn default() -> Self {
-        Self {
-            colors: vec!["648FFF", "785EF0", "DC267F", "FE6100", "FFB000"]
-                .into_iter()
-                .map(|c| Color::hex(c).unwrap())
-                .collect::<Vec<Color>>()
-                .into_iter()
-                .cycle(),
-        }
-    }
-}
-
-impl LayerColors {
-    pub fn get_color(&mut self) -> Color {
-        self.colors.next().unwrap()
-    }
-}
-
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ViewportDimensions {
     pub x_min: i64,
@@ -61,9 +34,10 @@ pub struct ViewportDimensions {
 }
 
 impl ViewportDimensions {
-    pub fn update(&mut self, other: &Self) -> () {
+    pub fn update(&mut self, other: &Self) {
         self.x_min = self.x_min.min(other.x_min);
         self.x_max = self.x_max.max(other.x_max);
+
         self.y_min = self.y_min.min(other.y_min);
         self.y_max = self.y_max.max(other.y_max);
     }
@@ -71,13 +45,6 @@ impl ViewportDimensions {
 
 #[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
 pub struct CursorWorldPos(pub IVec2);
-
-#[derive(Component, Debug, Default, Clone)]
-pub struct LoadProtoEvent {
-    lib: String,
-}
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct LoadCompleteEvent;
 
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct Layer;
@@ -106,13 +73,12 @@ impl Default for InLayer {
 )]
 pub struct LayerNum(pub u16);
 
+#[derive(Debug, Default, Component)]
+pub struct UpdateViewportEvent;
+
 fn main() {
     App::new()
-        .add_event::<LoadProtoEvent>()
-        .add_event::<LoadCompleteEvent>()
-        .add_event::<ImportRectEvent>()
-        .add_event::<ImportPolyEvent>()
-        .add_event::<ImportPathEvent>()
+        .add_event::<UpdateViewportEvent>()
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(WindowDescriptor {
             title: "Doug CAD".to_string(),
@@ -121,25 +87,22 @@ fn main() {
             vsync: true,
             ..Default::default()
         })
-        .insert_resource(LayerColors::default())
         .insert_resource(ViewportDimensions::default())
         .insert_resource(CursorWorldPos::default())
         .add_plugins(DefaultPlugins)
-        .add_plugin(ShapePlugin)
-        .add_stage("import", SystemStage::parallel())
-        .add_stage_after("import", "update_viewport", SystemStage::parallel())
+        .add_plugin(Layout21ImportPlugin)
+        .add_plugin(EditingPlugin)
+        .add_plugin(FramepacePlugin {
+            enabled: true,
+            framerate_limit: FramerateLimit::Manual(30),
+            warn_on_frame_drop: true,
+            ..Default::default()
+        })
         .add_startup_system(setup_system)
-        .add_startup_system(send_import_event_system)
-        .add_system(load_proto_lib_system)
-        .add_system(import_path_system)
-        .add_system(import_rect_system)
-        .add_system(import_poly_system)
         .add_system(update_camera_viewport_system)
         .add_system(camera_changed_system)
         .add_system(pan_zoom_camera_system)
         .add_system(cursor_world_pos_system)
-        .add_system(hover_shape_system)
-        .add_system(highlight_hovered_system)
         .run();
 }
 
@@ -175,8 +138,8 @@ pub fn pan_zoom_camera_system(
     if let Ok(mut transform) = q_camera.get_single_mut() {
         if pan.length_squared() > 0.0 {
             let scale = transform.scale.x;
-            transform.translation.x -= pan.x * scale;
-            transform.translation.y += pan.y * scale;
+            transform.translation.x -= pan.x;
+            transform.translation.y += pan.y;
         } else if scroll.abs() > 0.0 {
             let scale = (transform.scale.x - scroll).clamp(1.0, 10.0);
             transform.scale = Vec3::new(scale, scale, scale);
@@ -191,7 +154,7 @@ fn camera_changed_system(camera_q: Query<&Transform, (Changed<Transform>, With<C
 }
 
 pub fn update_camera_viewport_system(
-    mut load_complete_event_reader: EventReader<LoadCompleteEvent>,
+    mut load_complete_event_reader: EventReader<UpdateViewportEvent>,
     viewport: Res<ViewportDimensions>,
     mut camera_q: Query<&mut Transform, With<Camera>>,
 ) {
@@ -259,11 +222,4 @@ pub fn get_components_for_entity<'a>(
         }
     }
     None
-}
-
-fn send_import_event_system(mut my_events: EventWriter<LoadProtoEvent>) {
-    my_events.send(LoadProtoEvent {
-        lib: "./models/dff1_lib.proto".into(),
-        // "./models/oscibear.proto",
-    });
 }

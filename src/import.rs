@@ -1,10 +1,7 @@
 use crate::shapes::{Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeBundle};
-use crate::{
-    InLayer, LayerColors, LoadCompleteEvent, LoadProtoEvent, Nom, ViewportDimensions, ALPHA, WIDTH,
-};
+use crate::{InLayer, Nom, UpdateViewportEvent, ViewportDimensions, ALPHA, WIDTH};
 
 use bevy::prelude::*;
-// use bevy::render::camera::OrthographicProjection;
 use bevy_prototype_lyon::prelude::{
     shapes, DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
@@ -14,8 +11,70 @@ use layout21::raw::proto::proto;
 
 use std::slice::Iter;
 
+#[derive(Component, Debug)]
+pub struct LayerColors {
+    colors: std::iter::Cycle<std::vec::IntoIter<Color>>,
+}
+
+impl Default for LayerColors {
+    fn default() -> Self {
+        Self {
+            colors: vec!["648FFF", "785EF0", "DC267F", "FE6100", "FFB000"]
+                .into_iter()
+                .map(|c| Color::hex(c).unwrap())
+                .collect::<Vec<Color>>()
+                .into_iter()
+                .cycle(),
+        }
+    }
+}
+
+impl LayerColors {
+    pub fn get_color(&mut self) -> Color {
+        self.colors.next().unwrap()
+    }
+}
+
 pub fn get_shapes(cell: &Cell) -> Iter<LayerShapes> {
     cell.layout.as_ref().unwrap().shapes.iter()
+}
+
+pub struct Layout21ImportPlugin;
+
+impl Plugin for Layout21ImportPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(LayerColors::default())
+            .add_event::<LoadProtoEvent>()
+            .add_event::<LoadCompleteEvent>()
+            .add_event::<UpdateViewportEvent>()
+            .add_event::<ImportRectEvent>()
+            .add_event::<ImportPolyEvent>()
+            .add_event::<ImportPathEvent>()
+            .add_stage("import", SystemStage::parallel())
+            .add_stage_after("import", "update_viewport", SystemStage::parallel())
+            .add_startup_system(send_import_event_system)
+            .add_system(load_proto_lib_system)
+            .add_system(load_complete_system)
+            .add_system(import_path_system)
+            .add_system(import_rect_system)
+            .add_system(import_poly_system);
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct LoadProtoEvent {
+    lib: String,
+}
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LoadCompleteEvent {
+    pub viewport_dimensions: ViewportDimensions,
+}
+
+fn send_import_event_system(mut my_events: EventWriter<LoadProtoEvent>) {
+    my_events.send(LoadProtoEvent {
+        lib: "./models/dff1_lib.proto".into(),
+        // "./models/oscibear.proto",
+    });
 }
 
 pub struct ImportRectEvent {
@@ -36,10 +95,23 @@ pub struct ImportPathEvent {
     pub color: Color,
 }
 
-pub fn load_proto_lib_system(
-    mut load_proto_event_reader: EventReader<LoadProtoEvent>,
-    mut layer_colors: ResMut<LayerColors>,
+pub fn load_complete_system(
+    mut load_complete_event_reader: EventReader<LoadCompleteEvent>,
+    mut update_viewport_event_writer: EventWriter<UpdateViewportEvent>,
     mut viewport: ResMut<ViewportDimensions>,
+) {
+    for &LoadCompleteEvent {
+        viewport_dimensions,
+    } in load_complete_event_reader.iter()
+    {
+        *viewport = viewport_dimensions;
+        update_viewport_event_writer.send(UpdateViewportEvent);
+    }
+}
+
+pub fn load_proto_lib_system(
+    mut layer_colors: ResMut<LayerColors>,
+    mut load_proto_event_reader: EventReader<LoadProtoEvent>,
     mut load_complete_event_writer: EventWriter<LoadCompleteEvent>,
     mut import_rect_event_writer: EventWriter<ImportRectEvent>,
     mut import_poly_event_writer: EventWriter<ImportPolyEvent>,
@@ -47,21 +119,26 @@ pub fn load_proto_lib_system(
 ) {
     for LoadProtoEvent { lib } in load_proto_event_reader.iter() {
         let t = std::time::Instant::now();
+
+        let mut viewport_dimensions = ViewportDimensions::default();
+
         let plib: proto::Library = proto::open(lib).unwrap();
 
         let d = t.elapsed();
-        info!("File open task duration {:?}", d);
+        info!("Layout21 Proto import file open task duration {:?}", d);
 
         info!("{:?} {}", plib.units(), plib.units);
 
+        // oscibear.proto
         // let cell = plib.cells.iter().nth(770).unwrap();
+        // dff_lib.proto
         let cell = plib.cells.iter().nth(0).unwrap();
 
         let len = get_shapes(cell)
             .map(|s| s.rectangles.len() + s.polygons.len() + s.paths.len())
             .sum::<usize>();
 
-        info!("{:?} {}", cell.name, len);
+        info!("Cell {:?}, len: {}", cell.name, len);
 
         for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter() {
             let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
@@ -76,12 +153,12 @@ pub fn load_proto_lib_system(
                 } = rect;
                 let proto::Point { x, y } = lower_left.as_ref().unwrap();
 
-                viewport.update(&ViewportDimensions {
+                viewport_dimensions = ViewportDimensions {
                     x_min: *x,
                     x_max: x + width,
                     y_min: *y,
                     y_max: y + height,
-                });
+                };
 
                 import_rect_event_writer.send(ImportRectEvent {
                     rect: rect.clone(),
@@ -93,17 +170,19 @@ pub fn load_proto_lib_system(
             for poly in layer_shapes.polygons.iter() {
                 let proto::Polygon { vertices, .. } = poly;
 
-                viewport.update(&vertices.iter().fold(
-                    ViewportDimensions::default(),
-                    |mut vd, p: &proto::Point| {
-                        let proto::Point { x, y } = p;
-                        vd.x_min = vd.x_min.min(*x);
-                        vd.x_max = vd.x_max.max(*x);
-                        vd.y_min = vd.y_min.min(*y);
-                        vd.y_max = vd.y_max.min(*y);
-                        vd
-                    },
-                ));
+                viewport_dimensions.update(
+                    &(vertices.iter().fold(
+                        ViewportDimensions::default(),
+                        |mut vd, p: &proto::Point| {
+                            let proto::Point { x, y } = p;
+                            vd.x_min = vd.x_min.min(*x);
+                            vd.x_max = vd.x_max.max(*x);
+                            vd.y_min = vd.y_min.min(*y);
+                            vd.y_max = vd.y_max.min(*y);
+                            vd
+                        },
+                    )),
+                );
                 import_poly_event_writer.send(ImportPolyEvent {
                     poly: poly.clone(),
                     layer,
@@ -114,17 +193,19 @@ pub fn load_proto_lib_system(
             for path in layer_shapes.paths.iter() {
                 let proto::Path { points, .. } = path;
 
-                viewport.update(&points.iter().fold(
-                    ViewportDimensions::default(),
-                    |mut vd, p: &proto::Point| {
-                        let proto::Point { x, y } = p;
-                        vd.x_min = vd.x_min.min(*x);
-                        vd.x_max = vd.x_max.max(*x);
-                        vd.y_min = vd.y_min.min(*y);
-                        vd.y_max = vd.y_max.min(*y);
-                        vd
-                    },
-                ));
+                viewport_dimensions.update(
+                    &(points.iter().fold(
+                        ViewportDimensions::default(),
+                        |mut vd, p: &proto::Point| {
+                            let proto::Point { x, y } = p;
+                            vd.x_min = vd.x_min.min(*x);
+                            vd.x_max = vd.x_max.max(*x);
+                            vd.y_min = vd.y_min.min(*y);
+                            vd.y_max = vd.y_max.min(*y);
+                            vd
+                        },
+                    )),
+                );
 
                 import_path_event_writer.send(ImportPathEvent {
                     path: path.clone(),
@@ -134,19 +215,20 @@ pub fn load_proto_lib_system(
             }
         }
 
+        info!("load_proto_lib_system {:?}", viewport_dimensions);
+
+        load_complete_event_writer.send(LoadCompleteEvent {
+            viewport_dimensions,
+        });
+
         let d = t.elapsed();
-        info!("{:?}", d);
-
-        info!("viewport {:?}", viewport);
-
-        load_complete_event_writer.send(LoadCompleteEvent);
+        info!("Total Layout21 Proto import duration {:?}", d);
     }
 }
 
 pub fn import_rect_system(
     mut commands: Commands,
     mut import_rect_event_reader: EventReader<ImportRectEvent>,
-    // mut rtree_shape_collect_event_writer: EventWriter<RTreeShapeImportEvent>
 ) {
     for ImportRectEvent { rect, layer, color } in import_rect_event_reader.iter() {
         let proto::Rectangle {

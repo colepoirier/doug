@@ -4,10 +4,21 @@ use crate::{
     CursorWorldPos, InLayer, ALPHA,
 };
 use bevy::prelude::*;
+use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path};
 
 use lyon_algorithms::hit_test::hit_test_path;
 use lyon_geom::Translation;
+
+pub struct EditingPlugin;
+
+impl Plugin for EditingPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(ShapePlugin)
+            .add_system(hover_shape_system)
+            .add_system(highlight_hovered_system);
+    }
+}
 
 /// Marker component to indicate that the mouse
 /// currently hovers over the given entity.
