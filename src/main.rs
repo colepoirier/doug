@@ -3,7 +3,7 @@ pub mod import;
 pub mod shapes;
 
 use bevy::ecs::archetype::Archetypes;
-use bevy::ecs::component::ComponentId;
+use bevy::ecs::component::{ComponentId, Components};
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::render::camera::Camera;
 use bevy::{prelude::*, render::camera::ScalingMode};
@@ -101,10 +101,16 @@ fn main() {
         //     ..Default::default()
         // })
         .add_plugin(WorldInspectorPlugin::default())
+        .add_stage("camera_change", SystemStage::parallel())
+        .add_stage_after(
+            "camera_change",
+            "detect_camera_change",
+            SystemStage::parallel(),
+        )
         .add_startup_system(setup_system)
-        .add_system(update_camera_viewport_system)
-        .add_system(camera_changed_system)
-        .add_system(pan_zoom_camera_system)
+        .add_system_to_stage("camera_change", update_camera_viewport_system)
+        .add_system_to_stage("camera_change", pan_zoom_camera_system)
+        .add_system_to_stage("detect_camera_change", camera_changed_system)
         .add_system(cursor_world_pos_system)
         .run();
 }
@@ -215,14 +221,19 @@ pub fn cursor_world_pos_system(
     }
 }
 
-pub fn get_components_for_entity<'a>(
+pub fn get_component_names_for_entity(
     entity: Entity,
-    archetypes: &'a Archetypes,
-) -> Option<impl Iterator<Item = ComponentId> + 'a> {
+    archetypes: &Archetypes,
+    components: &Components,
+) -> Vec<String> {
+    let mut comp_names = vec![];
     for archetype in archetypes.iter() {
         if archetype.entities().contains(&entity) {
-            return Some(archetype.components());
+            comp_names = archetype.components().collect::<Vec<ComponentId>>();
         }
     }
-    None
+    comp_names
+        .iter()
+        .map(|c| components.get_info(*c).unwrap().name().to_string())
+        .collect::<Vec<String>>()
 }

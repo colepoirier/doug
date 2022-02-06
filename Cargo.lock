@@ -185,9 +185,9 @@ dependencies = [
 
 [[package]]
 name = "bevy-inspector-egui"
-version = "0.7.6"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11dd7d83e9335799929aa850b35ff0925360385e21a55f46727189bc07fb0308"
+checksum = "8638b84ac5899fae8b46d7e092bf9632a103174568740d822f15cac1ffa2fd28"
 dependencies = [
  "bevy",
  "bevy-inspector-egui-derive",
@@ -346,9 +346,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_egui"
-version = "0.10.3"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02074bee344c4aea813a0bbad6332682c81394cca44e3e2b88043adce970c997"
+checksum = "c8631a5b7a74fd53f5017d0251066e60eb8eb3cc4ee944c66e6d4022a3b7c6bc"
 dependencies = [
  "bevy",
  "bytemuck",
@@ -1080,9 +1080,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.6"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcae03edb34f947e64acdb1c33ec169824e20657e9ecb61cef6c8c74dcb8120"
+checksum = "b5e5bed1f1c269533fa816a0a5492b3545209a205ca1a54842be180eb63a16a6"
 dependencies = [
  "cfg-if 1.0.0",
  "lazy_static",
@@ -1430,7 +1430,7 @@ dependencies = [
 [[package]]
 name = "gds21"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "byteorder",
  "chrono",
@@ -1732,7 +1732,7 @@ dependencies = [
 [[package]]
 name = "layout21"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "gds21",
  "layout21protos",
@@ -1745,7 +1745,7 @@ dependencies = [
 [[package]]
 name = "layout21protos"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "prost 0.8.0",
  "prost-build",
@@ -1757,7 +1757,7 @@ dependencies = [
 [[package]]
 name = "layout21raw"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "enum_dispatch",
  "gds21",
@@ -1774,7 +1774,7 @@ dependencies = [
 [[package]]
 name = "layout21tetris"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "derive_builder",
  "derive_more",
@@ -1791,7 +1791,7 @@ dependencies = [
 [[package]]
 name = "layout21utils"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "by_address",
  "serde",
@@ -1810,7 +1810,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "lef21"
 version = "0.2.0"
-source = "git+https://github.com/dan-fritchman/Layout21.git#6be9564128fe21972217b1ed970f0bc345e6d1d6"
+source = "git+https://github.com/dan-fritchman/Layout21.git#2bf084a744e9f8fdacd4aa62748fe34ff4502b01"
 dependencies = [
  "derive_builder",
  "derive_more",
@@ -1826,9 +1826,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.116"
+version = "0.2.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "565dbd88872dbe4cc8a46e527f26483c1d1f7afa6b884a3bd6cd893d4f98da74"
+checksum = "e74d72e0f9b65b5b4ca49a346af3976df0f9c61d550727f349ecd559f251a26c"
 
 [[package]]
 name = "libloading"
@@ -1959,9 +1959,9 @@ dependencies = [
 
 [[package]]
 name = "mint"
-version = "0.5.8"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "162e591484b4b8fe9e1ca16ebf07ab584fdc3334508d76a788cd54d89cfc20dc"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
 
 [[package]]
 name = "mio"
@@ -2576,9 +2576,9 @@ dependencies = [
 
 [[package]]
 name = "rust_decimal"
-version = "1.20.0"
+version = "1.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0593ce4677e3800ddafb3de917e8397b1348e06e688128ade722d88fbe11ebf"
+checksum = "4214023b1223d02a4aad9f0bb9828317634a56530870a2eaf7200a99c0c10f68"
 dependencies = [
  "arrayvec 0.7.2",
  "num-traits",
@@ -2614,9 +2614,9 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
 name = "semver"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
+checksum = "0486718e92ec9a68fbed73bb5ef687d71103b142595b406835649bebd33f72c7"
 
 [[package]]
 name = "serde"
@@ -2853,9 +2853,9 @@ dependencies = [
 
 [[package]]
 name = "tracing"
-version = "0.1.29"
+version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "375a639232caf30edfc78e8d89b2d4c375515393e7af7e16f01cd96917fb2105"
+checksum = "2d8d93354fe2a8e50d5953f5ae2e47a3fc2ef03292e7ea46e3cc38f549525fb9"
 dependencies = [
  "cfg-if 1.0.0",
  "pin-project-lite",
@@ -2865,9 +2865,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.18"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f480b8f81512e825f337ad51e94c1eb5d3bbdf2b363dcd01e2b19a9ffe3f8e"
+checksum = "8276d9a4a3a558d7b7ad5303ad50b53d58264641b82914b7ada36bd762e7a716"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2876,11 +2876,12 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.21"
+version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f4ed65637b8390770814083d20756f87bfa2c21bf2f110babdc5438351746e4"
+checksum = "03cfcb51380632a72d3111cb8d3447a8d908e577d31beeac006f836383d29a23"
 dependencies = [
  "lazy_static",
+ "valuable",
 ]
 
 [[package]]
@@ -2896,9 +2897,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5312f325fe3588e277415f5a6cca1f4ccad0f248c4cd5a4bd33032d7286abc22"
+checksum = "74786ce43333fcf51efe947aed9718fbe46d5c7328ec3f1029e818083966d9aa"
 dependencies = [
  "ansi_term",
  "lazy_static",
@@ -2956,6 +2957,12 @@ dependencies = [
  "getrandom",
  "serde",
 ]
+
+[[package]]
+name = "valuable"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "version_check"

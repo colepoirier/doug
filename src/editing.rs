@@ -1,9 +1,12 @@
 use crate::{
-    shapes,
+    get_component_names_for_entity, shapes,
     shapes::{Poly, Rect},
     CursorWorldPos, InLayer, ALPHA,
 };
-use bevy::prelude::*;
+use bevy::{
+    ecs::{archetype::Archetypes, component::Components},
+    prelude::*,
+};
 use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path};
 
@@ -15,25 +18,22 @@ pub struct EditingPlugin;
 impl Plugin for EditingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(ShapePlugin)
-            .add_stage("detect_hover", SystemStage::parallel())
-            .add_stage_after("detect_hover", "highlight_hovered", SystemStage::parallel())
-            .add_stage_after(
-                "highlight_hovered",
-                "detect_clicked",
-                SystemStage::parallel(),
-            )
+            .add_stage_after(CoreStage::Update, "detect_clicked", SystemStage::parallel())
             .add_stage_after(
                 "detect_clicked",
                 "highlight_selected",
                 SystemStage::parallel(),
             )
-            .add_system_to_stage("detect_hover", cursor_hover_system)
-            .add_system_to_stage("detect_hover", debug_hovered_system)
-            .add_system_to_stage("detect_hover", debug_selected_system)
-            .add_system_to_stage("highlight_hovered", highlight_hovered_system)
+            .add_stage_after(
+                "highlight_selected",
+                "unhighlight_selected",
+                SystemStage::parallel(),
+            )
+            .add_system_to_stage(CoreStage::Update, cursor_hover_system)
+            .add_system_to_stage(CoreStage::PostUpdate, highlight_hovered_system)
             .add_system_to_stage("detect_clicked", select_clicked_system)
             .add_system_to_stage("highlight_selected", highlight_selected_sytem)
-            .add_system_to_stage("highlight_selected", unhighlight_deselected_system);
+            .add_system_to_stage("unhighlight_selected", unhighlight_deselected_system);
     }
 }
 
@@ -76,100 +76,80 @@ pub fn cursor_hover_system(
     rect_q: Query<(Entity, &Path, &Transform, &InLayer), With<Rect>>,
     poly_q: Query<(Entity, &Path, &Transform, &InLayer), With<Poly>>,
     path_q: Query<(Entity, &Path, &Transform, &InLayer), With<shapes::Path>>,
+    hovered_q: Query<Entity, With<Hovered>>,
 ) {
-    let mut top_shape = TopShape::default();
+    if cursor_pos.is_changed() {
+        let mut top_shape = TopShape::default();
 
-    let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
+        let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
 
-    for (entity, path, transform, layer) in rect_q.iter() {
-        let layer = **layer;
+        for (entity, path, transform, layer) in rect_q.iter() {
+            let layer = **layer;
 
-        let path = path.0.clone().transformed(&Translation::new(
-            transform.translation.x,
-            transform.translation.y,
-        ));
-        let shape = TopShape {
-            layer,
-            shape: Some(entity),
-        };
+            let path = path.0.clone().transformed(&Translation::new(
+                transform.translation.x,
+                transform.translation.y,
+            ));
+            let shape = TopShape {
+                layer,
+                shape: Some(entity),
+            };
 
-        if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
-            top_shape = shape;
-        } else {
-            commands.entity(entity).remove::<Hovered>();
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
+                top_shape = shape;
+            }
         }
-    }
 
-    for (entity, path, transform, layer) in poly_q.iter() {
-        let layer = **layer;
+        for (entity, path, transform, layer) in poly_q.iter() {
+            let layer = **layer;
 
-        let path = path.0.clone().transformed(&Translation::new(
-            transform.translation.x,
-            transform.translation.y,
-        ));
+            let path = path.0.clone().transformed(&Translation::new(
+                transform.translation.x,
+                transform.translation.y,
+            ));
 
-        let shape = TopShape {
-            layer,
-            shape: Some(entity),
-        };
+            let shape = TopShape {
+                layer,
+                shape: Some(entity),
+            };
 
-        if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
-            top_shape = shape;
-        } else {
-            commands.entity(entity).remove::<Hovered>();
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
+                top_shape = shape;
+            }
         }
-    }
 
-    for (entity, path, transform, layer) in path_q.iter() {
-        let layer = **layer;
+        for (entity, path, transform, layer) in path_q.iter() {
+            let layer = **layer;
 
-        let path = path.0.clone().transformed(&Translation::new(
-            transform.translation.x,
-            transform.translation.y,
-        ));
+            let path = path.0.clone().transformed(&Translation::new(
+                transform.translation.x,
+                transform.translation.y,
+            ));
 
-        let shape = TopShape {
-            layer,
-            shape: Some(entity),
-        };
+            let shape = TopShape {
+                layer,
+                shape: Some(entity),
+            };
 
-        if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
-            top_shape = shape;
-        } else {
-            commands.entity(entity).remove::<Hovered>();
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
+                top_shape = shape;
+            }
         }
-    }
 
-    // info!("{:?}", top_shape);
+        // info!("{:?}", top_shape);
 
-    if let Some(e) = top_shape.shape {
-        commands.entity(e).insert(Hovered);
-    }
-}
-
-pub fn debug_hovered_system(
-    hovered_q: Query<Entity, Added<Hovered>>,
-    selected_q: Query<Entity, Added<Selected>>,
-    hovered_removed: RemovedComponents<Hovered>,
-    selected_removed: RemovedComponents<Selected>,
-) {
-    for hovered in hovered_q.iter() {
-        info!("{:?} became Hovered", hovered);
-    }
-    for selected in selected_q.iter() {
-        info!("{:?} became Selected", selected);
-    }
-    for unhovered in hovered_removed.iter() {
-        info!("{:?} became Un-Hovered", unhovered);
-    }
-    for deselected in selected_removed.iter() {
-        info!("{:?} became De-Selected", deselected);
-    }
-}
-
-pub fn debug_selected_system(hovered_q: Query<Entity, Added<Selected>>) {
-    for hovered in hovered_q.iter() {
-        info!("{:?} became Selected", hovered);
+        if let Some(e) = top_shape.shape {
+            for hovered in hovered_q.iter() {
+                if e != hovered {
+                    commands.entity(hovered).remove::<Hovered>();
+                }
+            }
+            commands.entity(e).insert(Hovered);
+        } else {
+            for hovered in hovered_q.iter() {
+                commands.entity(hovered).remove::<Hovered>();
+            }
+        }
     }
 }
 
@@ -178,7 +158,9 @@ pub fn highlight_hovered_system(
     // We need all shapes the mouse hovers over.
     mut hovered_q: Query<&mut DrawMode, Added<Hovered>>,
     mut shape_q: Query<&mut DrawMode, Without<Hovered>>,
-    removed_hover: RemovedComponents<Hovered>,
+    removed_hovered: RemovedComponents<Hovered>,
+    // archetypes: &Archetypes,
+    // components: &Components,
 ) {
     for mut draw in hovered_q.iter_mut() {
         if let DrawMode::Outlined {
@@ -189,7 +171,12 @@ pub fn highlight_hovered_system(
         }
     }
 
-    for entity in removed_hover.iter() {
+    for entity in removed_hovered.iter() {
+        // info!(
+        //     "Components for {:?}: {:?}",
+        //     entity,
+        //     get_component_names_for_entity(entity, archetypes, components)
+        // );
         let mut draw = shape_q.get_mut(entity).unwrap();
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
