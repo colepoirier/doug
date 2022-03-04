@@ -1,12 +1,9 @@
 use crate::{
-    get_component_names_for_entity, shapes,
+    shapes,
     shapes::{Poly, Rect},
     CursorWorldPos, InLayer, Nom, ALPHA,
 };
-use bevy::{
-    ecs::{archetype::Archetypes, component::Components},
-    prelude::*,
-};
+use bevy::prelude::*;
 use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path};
 
@@ -49,7 +46,8 @@ pub struct Hovered;
 #[derive(Component)]
 pub struct Selected;
 
-/// Resource to calculate the interacted shape by layer/z-order
+/// Resource to calculate the shape the cursor interacted with by layer/z-order
+/// Layer 0 is furthest from the camera/screen, Layer 999 is closest to the camera
 #[derive(Copy, Clone, Debug, Default)]
 pub struct TopShape {
     pub layer: u16,
@@ -138,8 +136,6 @@ pub fn cursor_hover_system(
             }
         }
 
-        // info!("{:?}", top_shape);
-
         if let Some(e) = top_shape.shape {
             for hovered in hovered_q.iter() {
                 if e != hovered {
@@ -155,14 +151,11 @@ pub fn cursor_hover_system(
     }
 }
 
-/// Highlight a shape by making it more opaque when the mouse hovers over it.
+/// Highlight a shape as Hovered by making it more opaque when the mouse hovers over it.
 pub fn highlight_hovered_system(
-    // We need all shapes the mouse hovers over.
     mut hovered_q: Query<&mut DrawMode, Added<Hovered>>,
     mut shape_q: Query<&mut DrawMode, Without<Hovered>>,
     removed_hovered: RemovedComponents<Hovered>,
-    // archetypes: &Archetypes,
-    // components: &Components,
 ) {
     for mut draw in hovered_q.iter_mut() {
         if let DrawMode::Outlined {
@@ -174,11 +167,6 @@ pub fn highlight_hovered_system(
     }
 
     for entity in removed_hovered.iter() {
-        // info!(
-        //     "Components for {:?}: {:?}",
-        //     entity,
-        //     get_component_names_for_entity(entity, archetypes, components)
-        // );
         let mut draw = shape_q.get_mut(entity).unwrap();
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
@@ -209,11 +197,8 @@ pub fn select_clicked_system(
     }
 }
 
-/// Highlight a shape by making it more opaque when the mouse hovers over it.
-pub fn highlight_selected_sytem(
-    // We need all shapes the mouse hovers over.
-    mut curr_selected_q: Query<&mut DrawMode, With<Selected>>,
-) {
+/// Highlight a shape as selected by making it more opaque than the Hovered opacity when it is clicked.
+pub fn highlight_selected_sytem(mut curr_selected_q: Query<&mut DrawMode, With<Selected>>) {
     for mut draw in curr_selected_q.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
