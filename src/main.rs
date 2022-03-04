@@ -1,6 +1,7 @@
 pub mod editing;
 pub mod import;
 pub mod shapes;
+pub mod ui;
 
 use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
@@ -16,6 +17,7 @@ use bevy_inspector_egui::WorldInspectorPlugin;
 
 use editing::EditingPlugin;
 use import::Layout21ImportPlugin;
+use ui::UIPlugin;
 
 // Set a default alpha-value for most shapes
 pub const ALPHA: f32 = 0.1;
@@ -94,6 +96,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(Layout21ImportPlugin)
         .add_plugin(EditingPlugin)
+        .add_plugin(UIPlugin)
         // .add_plugin(FramepacePlugin {
         //     enabled: true,
         //     framerate_limit: FramerateLimit::Manual(30),
