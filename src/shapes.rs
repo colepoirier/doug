@@ -1,7 +1,7 @@
 use crate::{InLayer, Nom};
 use bevy::prelude::{Bundle, Component, IVec2};
 use bevy_prototype_lyon::entity;
-use layout21::protos::Point;
+use vlsir::Point;
 
 #[derive(Component, Default, Bundle)]
 pub struct ShapeBundle {

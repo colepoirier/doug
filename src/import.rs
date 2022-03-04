@@ -6,8 +6,7 @@ use bevy_prototype_lyon::prelude::{
     shapes, DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
 
-use layout21::protos::{Cell, LayerShapes};
-use layout21::raw::proto::proto;
+use vlsir::{raw, Cell, LayerShapes};
 
 use std::slice::Iter;
 
@@ -19,6 +18,10 @@ pub struct LayerColors {
 impl Default for LayerColors {
     fn default() -> Self {
         Self {
+            // IBM Design Language Color Library - Color blind safe palette
+            // https://ibm-design-language.eu-de.mybluemix.net/design/language/resources/color-library/
+            // Color Names: Ultramarine 40, Indigo 50, Magenta 50 , Orange 40, Gold 20
+            // It just looks pretty
             colors: vec!["648FFF", "785EF0", "DC267F", "FE6100", "FFB000"]
                 .into_iter()
                 .map(|c| Color::hex(c).unwrap())
@@ -52,7 +55,7 @@ impl Plugin for Layout21ImportPlugin {
             .add_event::<ImportPathEvent>()
             .add_stage("import", SystemStage::parallel())
             .add_stage_after("import", "update_viewport", SystemStage::parallel())
-            .add_startup_system(send_import_event_system)
+            // .add_startup_system(send_import_event_system)
             .add_system(load_proto_lib_system)
             .add_system(load_complete_system)
             .add_system(import_path_system)
@@ -63,34 +66,34 @@ impl Plugin for Layout21ImportPlugin {
 
 #[derive(Debug, Default, Clone)]
 pub struct LoadProtoEvent {
-    lib: String,
+    pub lib: String,
 }
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LoadCompleteEvent {
     pub viewport_dimensions: ViewportDimensions,
 }
 
-fn send_import_event_system(mut my_events: EventWriter<LoadProtoEvent>) {
-    my_events.send(LoadProtoEvent {
-        lib: "./models/dff1_lib.proto".into(),
-        // "./models/oscibear.proto",
-    });
-}
+// fn send_import_event_system(mut my_events: EventWriter<LoadProtoEvent>) {
+//     my_events.send(LoadProtoEvent {
+//         lib: "./models/dff1_lib.proto".into(),
+//         // "./models/oscibear.proto",
+//     });
+// }
 
 pub struct ImportRectEvent {
-    pub rect: proto::Rectangle,
+    pub rect: raw::Rectangle,
     pub layer: u16,
     pub color: Color,
 }
 
 pub struct ImportPolyEvent {
-    pub poly: proto::Polygon,
+    pub poly: raw::Polygon,
     pub layer: u16,
     pub color: Color,
 }
 
 pub struct ImportPathEvent {
-    pub path: proto::Path,
+    pub path: raw::Path,
     pub layer: u16,
     pub color: Color,
 }
@@ -122,7 +125,7 @@ pub fn load_proto_lib_system(
 
         let mut viewport_dimensions = ViewportDimensions::default();
 
-        let plib: proto::Library = proto::open(lib).unwrap();
+        let plib: raw::Library = vlsir::open(lib).unwrap();
 
         let d = t.elapsed();
         info!("Layout21 Proto import file open task duration {:?}", d);
@@ -145,13 +148,13 @@ pub fn load_proto_lib_system(
             let color = layer_colors.get_color();
 
             for rect in layer_shapes.rectangles.iter() {
-                let proto::Rectangle {
+                let raw::Rectangle {
                     lower_left,
                     width,
                     height,
                     ..
                 } = rect;
-                let proto::Point { x, y } = lower_left.as_ref().unwrap();
+                let raw::Point { x, y } = lower_left.as_ref().unwrap();
 
                 viewport_dimensions = ViewportDimensions {
                     x_min: *x,
@@ -168,13 +171,13 @@ pub fn load_proto_lib_system(
             }
 
             for poly in layer_shapes.polygons.iter() {
-                let proto::Polygon { vertices, .. } = poly;
+                let raw::Polygon { vertices, .. } = poly;
 
                 viewport_dimensions.update(
                     &(vertices.iter().fold(
                         ViewportDimensions::default(),
-                        |mut vd, p: &proto::Point| {
-                            let proto::Point { x, y } = p;
+                        |mut vd, p: &raw::Point| {
+                            let raw::Point { x, y } = p;
                             vd.x_min = vd.x_min.min(*x);
                             vd.x_max = vd.x_max.max(*x);
                             vd.y_min = vd.y_min.min(*y);
@@ -191,13 +194,13 @@ pub fn load_proto_lib_system(
             }
 
             for path in layer_shapes.paths.iter() {
-                let proto::Path { points, .. } = path;
+                let raw::Path { points, .. } = path;
 
                 viewport_dimensions.update(
                     &(points.iter().fold(
                         ViewportDimensions::default(),
-                        |mut vd, p: &proto::Point| {
-                            let proto::Point { x, y } = p;
+                        |mut vd, p: &raw::Point| {
+                            let raw::Point { x, y } = p;
                             vd.x_min = vd.x_min.min(*x);
                             vd.x_max = vd.x_max.max(*x);
                             vd.y_min = vd.y_min.min(*y);
@@ -231,14 +234,14 @@ pub fn import_rect_system(
     mut import_rect_event_reader: EventReader<ImportRectEvent>,
 ) {
     for ImportRectEvent { rect, layer, color } in import_rect_event_reader.iter() {
-        let proto::Rectangle {
+        let raw::Rectangle {
             net,
             lower_left,
             width,
             height,
         } = rect;
 
-        let proto::Point { x, y } = lower_left.as_ref().unwrap();
+        let raw::Point { x, y } = lower_left.as_ref().unwrap();
 
         let rect = shapes::Rectangle {
             origin: shapes::RectangleOrigin::BottomLeft,
@@ -284,12 +287,12 @@ pub fn import_poly_system(
     mut import_poly_event_reader: EventReader<ImportPolyEvent>,
 ) {
     for ImportPolyEvent { poly, layer, color } in import_poly_event_reader.iter() {
-        let proto::Polygon { vertices, net } = poly;
+        let raw::Polygon { vertices, net } = poly;
 
         let poly = shapes::Polygon {
             points: vertices
                 .iter()
-                .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
+                .map(|raw::Point { x, y }| Vec2::new(*x as f32, *y as f32))
                 .collect::<Vec<Vec2>>(),
             closed: true,
         };
@@ -331,12 +334,12 @@ pub fn import_path_system(
     mut import_path_event_reader: EventReader<ImportPathEvent>,
 ) {
     for ImportPathEvent { path, layer, color } in import_path_event_reader.iter() {
-        let proto::Path { points, width, net } = path;
+        let raw::Path { points, width, net } = path;
 
         let path = shapes::Polygon {
             points: points
                 .iter()
-                .map(|proto::Point { x, y }| Vec2::new(*x as f32, *y as f32))
+                .map(|raw::Point { x, y }| Vec2::new(*x as f32, *y as f32))
                 .collect::<Vec<Vec2>>(),
             closed: false,
         };
@@ -375,15 +378,17 @@ pub fn import_path_system(
 
 #[cfg(test)]
 mod tests {
-    use layout21::protos::save;
-    use layout21::raw::{gds, proto::ProtoExporter, LayoutResult};
+    use layout21::raw::{
+        gds::gds21::GdsLibrary, gds::GdsImporter, proto::ProtoExporter, LayoutResult,
+    };
+    use vlsir::save;
 
     #[test]
     fn make_oscibear_proto() -> LayoutResult<()> {
-        let gds = gds::gds21::GdsLibrary::load("./user_analog_project_wrapper.gds").unwrap();
+        let gds = GdsLibrary::load("./user_analog_project_wrapper.gds").unwrap();
 
         // Convert to Layout21::Raw
-        let lib = gds::GdsImporter::import(&gds, None)?;
+        let lib = GdsImporter::import(&gds, None)?;
         println!("{}", lib.name);
         println!("{}", lib.cells.len());
 
