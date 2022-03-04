@@ -1,7 +1,7 @@
 use crate::{
     get_component_names_for_entity, shapes,
     shapes::{Poly, Rect},
-    CursorWorldPos, InLayer, ALPHA,
+    CursorWorldPos, InLayer, Nom, ALPHA,
 };
 use bevy::{
     ecs::{archetype::Archetypes, component::Components},
@@ -33,7 +33,9 @@ impl Plugin for EditingPlugin {
             .add_system_to_stage(CoreStage::PostUpdate, highlight_hovered_system)
             .add_system_to_stage("detect_clicked", select_clicked_system)
             .add_system_to_stage("highlight_selected", highlight_selected_sytem)
-            .add_system_to_stage("unhighlight_selected", unhighlight_deselected_system);
+            .add_system_to_stage("unhighlight_selected", unhighlight_deselected_system)
+            .add_system(print_hovered_info_system)
+            .add_system(print_selected_info_system);
     }
 }
 
@@ -238,6 +240,18 @@ pub fn unhighlight_deselected_system(
                 fill_mode.color = *fill_mode.color.set_a(ALPHA);
             }
         }
+    }
+}
+
+pub fn print_hovered_info_system(query: Query<(Entity, &Nom, &InLayer), Added<Hovered>>) {
+    for (e, net, layer) in query.iter() {
+        info!("Hovered: entity: {e:?}, net: {net:?}, layer: {layer:?}.");
+    }
+}
+
+pub fn print_selected_info_system(query: Query<(Entity, &Nom, &InLayer), Added<Selected>>) {
+    for (e, net, layer) in query.iter() {
+        info!("Selected: entity: {e:?}, net: {net:?}, layer: {layer:?}.");
     }
 }
 
