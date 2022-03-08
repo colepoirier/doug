@@ -9,11 +9,11 @@ use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::render::camera::Camera;
 use bevy::{prelude::*, render::camera::ScalingMode};
 
+use bevy_egui::EguiContext;
 use derive_more::{Deref, DerefMut};
 
 // use bevy_framepace::{FramepacePlugin, FramerateLimit};
-
-use bevy_inspector_egui::WorldInspectorPlugin;
+// use bevy_inspector_egui::WorldInspectorPlugin;
 
 use editing::EditingPlugin;
 use import::Layout21ImportPlugin;
@@ -103,7 +103,7 @@ fn main() {
         //     warn_on_frame_drop: true,
         //     ..Default::default()
         // })
-        .add_plugin(WorldInspectorPlugin::default())
+        // .add_plugin(WorldInspectorPlugin::default())
         .add_stage("camera_change", SystemStage::parallel())
         .add_stage_after(
             "camera_change",
@@ -128,6 +128,7 @@ pub fn pan_zoom_camera_system(
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
     input_mouse: Res<Input<MouseButton>>,
+    mut egui_ctx: ResMut<EguiContext>,
     mut q_camera: Query<&mut Transform, With<Camera>>,
 ) {
     // change input mapping for panning here.
@@ -136,14 +137,16 @@ pub fn pan_zoom_camera_system(
     let mut pan = Vec2::ZERO;
     let mut scroll = 0.0;
 
-    if input_mouse.pressed(pan_button) {
-        for ev in ev_motion.iter() {
-            pan += ev.delta;
+    if !egui_ctx.ctx_mut().wants_pointer_input() {
+        if input_mouse.pressed(pan_button) {
+            for ev in ev_motion.iter() {
+                pan += ev.delta;
+            }
         }
-    }
 
-    for ev in ev_scroll.iter() {
-        scroll += ev.y;
+        for ev in ev_scroll.iter() {
+            scroll += ev.y;
+        }
     }
 
     // assuming there is exacly one main camera entity, so this is ok.
@@ -166,11 +169,11 @@ fn camera_changed_system(camera_q: Query<&Transform, (Changed<Transform>, With<C
 }
 
 pub fn update_camera_viewport_system(
-    mut load_complete_event_reader: EventReader<UpdateViewportEvent>,
+    mut update_viewport_event_reader: EventReader<UpdateViewportEvent>,
     viewport: Res<ViewportDimensions>,
     mut camera_q: Query<&mut Transform, With<Camera>>,
 ) {
-    for _ in load_complete_event_reader.iter() {
+    for _ in update_viewport_event_reader.iter() {
         let mut camera_transform = camera_q.single_mut();
 
         let ViewportDimensions {

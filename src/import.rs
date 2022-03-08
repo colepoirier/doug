@@ -6,7 +6,9 @@ use bevy_prototype_lyon::prelude::{
     shapes, DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
 
-use vlsir::{raw, Cell, LayerShapes};
+use derive_more::{Deref, DerefMut};
+
+use vlsir::{raw, Cell, LayerShapes, Library};
 
 use std::slice::Iter;
 
@@ -42,13 +44,23 @@ pub fn get_shapes(cell: &Cell) -> Iter<LayerShapes> {
     cell.layout.as_ref().unwrap().shapes.iter()
 }
 
+#[derive(Debug, Default)]
+pub struct ProtoGdsLib {
+    pub lib: Option<Library>,
+    pub cells: Vec<String>,
+    pub selected: usize,
+}
+
 pub struct Layout21ImportPlugin;
 
 impl Plugin for Layout21ImportPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(LayerColors::default())
-            .add_event::<LoadProtoEvent>()
-            .add_event::<LoadCompleteEvent>()
+            .insert_resource(ProtoGdsLib::default())
+            .add_event::<LoadLibEvent>()
+            .add_event::<LoadLibCompleteEvent>()
+            .add_event::<LoadCellEvent>()
+            .add_event::<LoadCellCompleteEvent>()
             .add_event::<UpdateViewportEvent>()
             .add_event::<ImportRectEvent>()
             .add_event::<ImportPolyEvent>()
@@ -57,7 +69,8 @@ impl Plugin for Layout21ImportPlugin {
             .add_stage_after("import", "update_viewport", SystemStage::parallel())
             // .add_startup_system(send_import_event_system)
             .add_system(load_proto_lib_system)
-            .add_system(load_complete_system)
+            .add_system(load_proto_cell_system)
+            .add_system(load_cell_complete_system)
             .add_system(import_path_system)
             .add_system(import_rect_system)
             .add_system(import_poly_system);
@@ -65,20 +78,20 @@ impl Plugin for Layout21ImportPlugin {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct LoadProtoEvent {
+pub struct LoadLibEvent {
     pub lib: String,
 }
+
 #[derive(Debug, Default, Clone, Copy)]
-pub struct LoadCompleteEvent {
+pub struct LoadLibCompleteEvent;
+
+#[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
+pub struct LoadCellEvent(usize);
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LoadCellCompleteEvent {
     pub viewport_dimensions: ViewportDimensions,
 }
-
-// fn send_import_event_system(mut my_events: EventWriter<LoadProtoEvent>) {
-//     my_events.send(LoadProtoEvent {
-//         lib: "./models/dff1_lib.proto".into(),
-//         // "./models/oscibear.proto",
-//     });
-// }
 
 pub struct ImportRectEvent {
     pub rect: raw::Rectangle,
@@ -98,12 +111,12 @@ pub struct ImportPathEvent {
     pub color: Color,
 }
 
-pub fn load_complete_system(
-    mut load_complete_event_reader: EventReader<LoadCompleteEvent>,
+pub fn load_cell_complete_system(
+    mut load_complete_event_reader: EventReader<LoadCellCompleteEvent>,
     mut update_viewport_event_writer: EventWriter<UpdateViewportEvent>,
     mut viewport: ResMut<ViewportDimensions>,
 ) {
-    for &LoadCompleteEvent {
+    for &LoadCellCompleteEvent {
         viewport_dimensions,
     } in load_complete_event_reader.iter()
     {
@@ -113,35 +126,72 @@ pub fn load_complete_system(
 }
 
 pub fn load_proto_lib_system(
-    mut layer_colors: ResMut<LayerColors>,
-    mut load_proto_event_reader: EventReader<LoadProtoEvent>,
-    mut load_complete_event_writer: EventWriter<LoadCompleteEvent>,
-    mut import_rect_event_writer: EventWriter<ImportRectEvent>,
-    mut import_poly_event_writer: EventWriter<ImportPolyEvent>,
-    mut import_path_event_writer: EventWriter<ImportPathEvent>,
+    mut proto_gds_lib: ResMut<ProtoGdsLib>,
+    mut load_proto_event_reader: EventReader<LoadLibEvent>,
+    mut load_lib_complete_event_writer: EventWriter<LoadLibCompleteEvent>,
+    mut load_cell_event_writer: EventWriter<LoadCellEvent>,
 ) {
-    for LoadProtoEvent { lib } in load_proto_event_reader.iter() {
+    for LoadLibEvent { lib } in load_proto_event_reader.iter() {
         let t = std::time::Instant::now();
 
-        let mut viewport_dimensions = ViewportDimensions::default();
+        let lib: Library = vlsir::open(lib).unwrap();
 
-        let plib: raw::Library = vlsir::open(lib).unwrap();
+        let cells = lib
+            .cells
+            .iter()
+            .map(|c| c.name.clone())
+            .collect::<Vec<String>>();
+
+        let longest = cells.iter().max().unwrap();
+
+        info!(
+            "Longest cell name: {} chars, {}",
+            longest.chars().count(),
+            longest
+        );
+
+        let lib = Some(lib);
+
+        *proto_gds_lib = ProtoGdsLib {
+            lib,
+            cells,
+            selected: 0,
+        };
 
         let d = t.elapsed();
         info!("Layout21 Proto import file open task duration {:?}", d);
 
-        info!("{:?} {}", plib.units(), plib.units);
+        load_lib_complete_event_writer.send(LoadLibCompleteEvent);
+        load_cell_event_writer.send(LoadCellEvent(0));
+    }
+}
+
+pub fn load_proto_cell_system(
+    proto_gds_lib: Res<ProtoGdsLib>,
+    mut layer_colors: ResMut<LayerColors>,
+    mut load_cell_event_reader: EventReader<LoadCellEvent>,
+    mut load_cell_complete_event_writer: EventWriter<LoadCellCompleteEvent>,
+    mut import_rect_event_writer: EventWriter<ImportRectEvent>,
+    mut import_poly_event_writer: EventWriter<ImportPolyEvent>,
+    mut import_path_event_writer: EventWriter<ImportPathEvent>,
+) {
+    for &cell_idx in load_cell_event_reader.iter() {
+        let t = std::time::Instant::now();
+
+        let mut viewport_dimensions = ViewportDimensions::default();
 
         // oscibear.proto
         // let cell = plib.cells.iter().nth(770).unwrap();
         // dff_lib.proto
-        let cell = plib.cells.iter().nth(0).unwrap();
+        // let cell = plib.cells.iter().nth(0).unwrap();
 
-        let len = get_shapes(cell)
+        let cell = &proto_gds_lib.lib.as_ref().unwrap().cells[*cell_idx];
+
+        let num_shapes = get_shapes(cell)
             .map(|s| s.rectangles.len() + s.polygons.len() + s.paths.len())
             .sum::<usize>();
 
-        info!("Cell {:?}, len: {}", cell.name, len);
+        info!("Cell {}, num shapes: {num_shapes}", cell.name);
 
         for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter() {
             let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
@@ -218,9 +268,7 @@ pub fn load_proto_lib_system(
             }
         }
 
-        info!("load_proto_lib_system {:?}", viewport_dimensions);
-
-        load_complete_event_writer.send(LoadCompleteEvent {
+        load_cell_complete_event_writer.send(LoadCellCompleteEvent {
             viewport_dimensions,
         });
 
