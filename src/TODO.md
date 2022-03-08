@@ -8,3 +8,4 @@
 - implement selected shapes 'corner and midpoints' to indicate where the shape can be clicked-and-dragged to edit from, add associated editing functionality
 - use rkyv to back the editable cell data, and create a way to serialize this back to the proto/gds file that the un-edited cell was loaded from
 - render LODs of qoi images from the svg shapes for large designs, store them in tiledb, and implement data storage in tile db for each tile of each LOD level so that zooming in and out works smoothly, as do mass edits such as chaning a layer color, track width... other operations... as well as querying by net name and highliting those shapes in the zoomed out view so one can identify HDL modules in the physical layout
+- implement unit and integration tests
