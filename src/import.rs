@@ -211,7 +211,7 @@ pub fn load_proto_cell_system(
             .map(|s| s.rectangles.len() + s.polygons.len() + s.paths.len())
             .sum::<usize>();
 
-        info!("Cell {}, num shapes: {num_shapes}", cell.name);
+        info!("Cell: {}, num shapes: {num_shapes}", cell.name);
 
         for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter() {
             let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
