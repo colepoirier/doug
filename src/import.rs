@@ -2,6 +2,7 @@ use crate::shapes::{Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeB
 use crate::{InLayer, Nom, UpdateViewportEvent, ViewportDimensions, ALPHA, WIDTH};
 
 use bevy::prelude::*;
+use bevy_prototype_lyon::entity;
 use bevy_prototype_lyon::prelude::{
     shapes, DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
@@ -65,15 +66,16 @@ impl Plugin for Layout21ImportPlugin {
             .add_event::<ImportRectEvent>()
             .add_event::<ImportPolyEvent>()
             .add_event::<ImportPathEvent>()
-            .add_stage("import", SystemStage::parallel())
-            .add_stage_after("import", "update_viewport", SystemStage::parallel())
+            .add_stage("reset_world", SystemStage::parallel())
+            .add_stage_after("reset_world", "import", SystemStage::parallel())
             // .add_startup_system(send_import_event_system)
-            .add_system(load_proto_lib_system)
-            .add_system(load_proto_cell_system)
-            .add_system(load_cell_complete_system)
-            .add_system(import_path_system)
-            .add_system(import_rect_system)
-            .add_system(import_poly_system);
+            .add_system_to_stage("reset_world", despawn_all_shapes_system)
+            .add_system_to_stage("import", load_proto_lib_system)
+            .add_system_to_stage("import", load_proto_cell_system)
+            .add_system_to_stage("import", load_cell_complete_system)
+            .add_system_to_stage("import", import_path_system)
+            .add_system_to_stage("import", import_rect_system)
+            .add_system_to_stage("import", import_poly_system);
     }
 }
 
@@ -86,7 +88,7 @@ pub struct LoadLibEvent {
 pub struct LoadLibCompleteEvent;
 
 #[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
-pub struct LoadCellEvent(usize);
+pub struct LoadCellEvent(pub usize);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LoadCellCompleteEvent {
@@ -163,6 +165,24 @@ pub fn load_proto_lib_system(
 
         load_lib_complete_event_writer.send(LoadLibCompleteEvent);
         load_cell_event_writer.send(LoadCellEvent(0));
+    }
+}
+
+pub fn despawn_all_shapes_system(
+    mut commands: Commands,
+    query: Query<Entity, With<entity::Path>>,
+    mut load_proto_event_reader: EventReader<LoadLibEvent>,
+    mut load_cell_event_reader: EventReader<LoadCellEvent>,
+) {
+    for _ in load_proto_event_reader.iter() {
+        for e in query.iter() {
+            commands.entity(e).despawn();
+        }
+    }
+    for _ in load_cell_event_reader.iter() {
+        for e in query.iter() {
+            commands.entity(e).despawn();
+        }
     }
 }
 

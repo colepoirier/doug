@@ -168,13 +168,26 @@ fn camera_changed_system(camera_q: Query<&Transform, (Changed<Transform>, With<C
     }
 }
 
+// from the removed impl for f32 in std: library/std/src/f32.rs
+pub fn lerp(num: f32, start: f32, end: f32) -> f32 {
+    // consistent
+    if start == end {
+        start
+
+    // exact/monotonic
+    } else {
+        num.mul_add(end, (-num).mul_add(start, start))
+    }
+}
+
 pub fn update_camera_viewport_system(
     mut update_viewport_event_reader: EventReader<UpdateViewportEvent>,
     viewport: Res<ViewportDimensions>,
-    mut camera_q: Query<&mut Transform, With<Camera>>,
+    windows: Res<Windows>,
+    mut camera_q: Query<(&mut Transform, &Camera)>,
 ) {
     for _ in update_viewport_event_reader.iter() {
-        let mut camera_transform = camera_q.single_mut();
+        let (mut cam_t, cam) = camera_q.single_mut();
 
         let ViewportDimensions {
             x_min,
@@ -183,23 +196,50 @@ pub fn update_camera_viewport_system(
             y_max,
         } = *viewport;
 
-        info!(
-            "[x] min: {}, max: {} [y] min: {}, max: {}",
-            x_min, x_max, y_min, y_max
-        );
+        info!("[x] min: {x_min}, max: {x_max} [y] min: {y_min}, max: {y_max}",);
 
-        let x = (x_max - x_min) as f32;
-        let y = (y_max - y_min) as f32;
+        let width = (x_max - x_min) as f32;
+        let height = (y_max - y_min) as f32;
 
-        info!("x {} y {}", x, y);
+        info!("width: {width}, height: {height}");
 
-        let s = x.max(y) as f32 / 1800.0;
+        let padding = 100.0;
 
-        camera_transform.scale.x = s;
-        camera_transform.scale.y = s;
+        let window = windows.get(cam.window).unwrap();
 
-        camera_transform.translation.x = (x - 1920.0) / 1.8;
-        camera_transform.translation.y = (y - 1080.0) / 1.8;
+        let screen_width = window.width() - (2.0 * padding);
+        let screen_height = window.height() - (2.0 * padding);
+
+        let width_ratio = width / screen_width;
+        let height_ratio = height / screen_height;
+
+        info!("width/viewport_width: {width_ratio}, height/viewport_height: {height_ratio}");
+
+        let scale = width_ratio.max(height_ratio);
+
+        let world_width = screen_width * scale;
+        let world_height = screen_height * scale;
+
+        info!("world_width: {world_width}, world_height: {world_height}");
+
+        cam_t.scale.x = scale;
+        cam_t.scale.y = scale;
+
+        let x_min = x_min as f32;
+        let x_max = x_max as f32;
+        let y_min = y_min as f32;
+        let y_max = y_max as f32;
+
+        cam_t.translation.x = if x_min >= 0.0 {
+            (x_max - x_min) / 2.0
+        } else {
+            x_max + x_min
+        };
+        cam_t.translation.y = if y_min >= 0.0 {
+            (world_height - height) / 2.0 - y_min
+        } else {
+            (y_max + y_min) / 2.0
+        };
     }
 }
 

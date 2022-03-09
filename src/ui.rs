@@ -1,7 +1,6 @@
-use crate::import::{LoadCellCompleteEvent, LoadLibEvent, ProtoGdsLib};
+use crate::import::{LoadCellCompleteEvent, LoadCellEvent, LoadLibEvent, ProtoGdsLib};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
-use layout21::protos::LayerShapes;
 use rfd::FileDialog;
 
 pub struct UIPlugin;
@@ -17,7 +16,8 @@ impl Plugin for UIPlugin {
             .insert_resource(LibInfoUIState::default())
             .add_system(file_menu_system)
             // .add_system(debug_cursor_ui_or_world_system)
-            .add_system(lib_info_cell_picker_system);
+            .add_system(lib_info_cell_picker_system)
+            .add_system(load_dropdown_selected_cell_system);
     }
 }
 
@@ -55,6 +55,7 @@ pub fn lib_info_cell_picker_system(
     proto_gds_lib: Res<ProtoGdsLib>,
     mut state: ResMut<LibInfoUIState>,
 ) {
+    let state_start = state.selected;
     let lib_name = if let Some(lib) = proto_gds_lib.lib.as_ref() {
         lib.domain.clone()
     } else {
@@ -103,6 +104,28 @@ pub fn lib_info_cell_picker_system(
                 ));
             }
         });
+    if state_start != state.selected {
+        info!(
+            "State.selected chagned from {} to {}",
+            state_start, state.selected
+        );
+    }
+    if state.is_changed() {
+        info!(
+            "Res says state selected chagned? Did it actually? {}",
+            state.selected != state_start
+        );
+    }
+}
+
+pub fn load_dropdown_selected_cell_system(
+    state: Res<LibInfoUIState>,
+    mut load_cell_event_writer: EventWriter<LoadCellEvent>,
+) {
+    if state.is_changed() && state.selected != 0 {
+        info!("{state:?}");
+        // load_cell_event_writer.send(LoadCellEvent(state.selected));
+    }
 }
 
 // figure out if cursor is hovering over UI or over bevy 'app world'
