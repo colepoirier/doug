@@ -167,12 +167,13 @@ pub fn highlight_hovered_system(
     }
 
     for entity in removed_hovered.iter() {
-        let mut draw = shape_q.get_mut(entity).unwrap();
-        if let DrawMode::Outlined {
-            ref mut fill_mode, ..
-        } = *draw
-        {
-            fill_mode.color = *fill_mode.color.set_a(ALPHA);
+        if let Ok(mut draw) = shape_q.get_mut(entity) {
+            if let DrawMode::Outlined {
+                ref mut fill_mode, ..
+            } = *draw
+            {
+                fill_mode.color = *fill_mode.color.set_a(ALPHA);
+            }
         }
     }
 }
@@ -215,14 +216,16 @@ pub fn unhighlight_deselected_system(
     deselected: RemovedComponents<Selected>,
 ) {
     for entity in deselected.iter() {
-        if let DrawMode::Outlined {
-            ref mut fill_mode, ..
-        } = *draw_q.get_mut(entity).unwrap()
-        {
-            if query.get_component::<Hovered>(entity).is_ok() {
-                fill_mode.color = *fill_mode.color.set_a(0.5);
-            } else {
-                fill_mode.color = *fill_mode.color.set_a(ALPHA);
+        if let Ok(mut draw_mode) = draw_q.get_mut(entity) {
+            if let DrawMode::Outlined {
+                ref mut fill_mode, ..
+            } = *draw_mode
+            {
+                if query.get_component::<Hovered>(entity).is_ok() {
+                    fill_mode.color = *fill_mode.color.set_a(0.5);
+                } else {
+                    fill_mode.color = *fill_mode.color.set_a(ALPHA);
+                }
             }
         }
     }

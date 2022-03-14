@@ -156,7 +156,7 @@ pub fn pan_zoom_camera_system(
             transform.translation.x -= pan.x * scale / 4.0;
             transform.translation.y += pan.y * scale / 4.0;
         } else if scroll.abs() > 0.0 {
-            let scale = (transform.scale.x - scroll).clamp(1.0, 10.0);
+            let scale = (transform.scale.x - scroll).clamp(1.0, 1_000_000_000.0);
             transform.scale = Vec3::new(scale, scale, scale);
         }
     }
@@ -233,10 +233,10 @@ pub fn update_camera_viewport_system(
         cam_t.translation.x = if x_min >= 0.0 {
             (x_max - x_min) / 2.0
         } else {
-            x_max + x_min
+            (x_max + x_min) / 2.0
         };
         cam_t.translation.y = if y_min >= 0.0 {
-            (world_height - height) / 2.0 - y_min
+            y_min + (height / 2.0)
         } else {
             (y_max + y_min) / 2.0
         };

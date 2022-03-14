@@ -2,10 +2,14 @@ use crate::shapes::{Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeB
 use crate::{InLayer, Nom, UpdateViewportEvent, ViewportDimensions, ALPHA, WIDTH};
 
 use bevy::prelude::*;
+
+use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy_prototype_lyon::entity;
 use bevy_prototype_lyon::prelude::{
     shapes, DrawMode, FillMode, FillOptions, GeometryBuilder, StrokeMode, StrokeOptions,
 };
+
+use futures_lite::future;
 
 use derive_more::{Deref, DerefMut};
 
@@ -46,7 +50,9 @@ pub fn get_shapes(cell: &Cell) -> Iter<LayerShapes> {
 }
 
 #[derive(Debug, Default)]
-pub struct ProtoGdsLib {
+pub struct VlsirLib {
+    pub path: Option<String>,
+    pub name: Option<String>,
     pub lib: Option<Library>,
     pub cells: Vec<String>,
     pub selected: usize,
@@ -57,9 +63,10 @@ pub struct Layout21ImportPlugin;
 impl Plugin for Layout21ImportPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(LayerColors::default())
-            .insert_resource(ProtoGdsLib::default())
-            .add_event::<LoadLibEvent>()
-            .add_event::<LoadLibCompleteEvent>()
+            .insert_resource(VlsirLib::default())
+            .add_event::<OpenVlsirLibEvent>()
+            .add_event::<OpenVlsirLibCompleteEvent>()
+            .add_event::<ImportLibCompleteEvent>()
             .add_event::<LoadCellEvent>()
             .add_event::<LoadCellCompleteEvent>()
             .add_event::<UpdateViewportEvent>()
@@ -70,8 +77,11 @@ impl Plugin for Layout21ImportPlugin {
             .add_stage_after("reset_world", "import", SystemStage::parallel())
             // .add_startup_system(send_import_event_system)
             .add_system_to_stage("reset_world", despawn_all_shapes_system)
-            .add_system_to_stage("import", load_proto_lib_system)
-            .add_system_to_stage("import", load_proto_cell_system)
+            .add_system_to_stage("import", spawn_vlsir_open_task_sytem)
+            .add_system_to_stage("import", handle_vlsir_open_task_system)
+            .add_system_to_stage("import", vlsir_open_task_duration_system)
+            .add_system_to_stage("import", import_lib_system)
+            .add_system_to_stage("import", load_cell_system)
             .add_system_to_stage("import", load_cell_complete_system)
             .add_system_to_stage("import", import_path_system)
             .add_system_to_stage("import", import_rect_system)
@@ -79,13 +89,14 @@ impl Plugin for Layout21ImportPlugin {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct LoadLibEvent {
-    pub lib: String,
-}
+#[derive(Debug, Default, Clone, Copy)]
+pub struct OpenVlsirLibEvent;
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct LoadLibCompleteEvent;
+pub struct OpenVlsirLibCompleteEvent;
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ImportLibCompleteEvent;
 
 #[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
 pub struct LoadCellEvent(pub usize);
@@ -127,16 +138,66 @@ pub fn load_cell_complete_system(
     }
 }
 
-pub fn load_proto_lib_system(
-    mut proto_gds_lib: ResMut<ProtoGdsLib>,
-    mut load_proto_event_reader: EventReader<LoadLibEvent>,
-    mut load_lib_complete_event_writer: EventWriter<LoadLibCompleteEvent>,
+pub fn spawn_vlsir_open_task_sytem(
+    mut commands: Commands,
+    vlsir_lib: Res<VlsirLib>,
+    mut vlsir_open_lib_event_reader: EventReader<OpenVlsirLibEvent>,
+    thread_pool: Res<AsyncComputeTaskPool>,
+) {
+    for _ in vlsir_open_lib_event_reader.iter() {
+        let path = vlsir_lib.path.clone().unwrap();
+        let task: Task<Library> = thread_pool.spawn(async move {
+            // enable to test UI Lib Info loading progress bar animation
+            // std::thread::sleep(std::time::Duration::from_secs(5));
+            vlsir::open(path).unwrap()
+        });
+        commands.spawn().insert(task);
+    }
+}
+
+pub fn handle_vlsir_open_task_system(
+    mut commands: Commands,
+    mut lib: ResMut<VlsirLib>,
+    mut vlsir_open_task_q: Query<(Entity, &mut Task<Library>)>,
+    mut vlsir_open_lib_complete_event_writer: EventWriter<OpenVlsirLibCompleteEvent>,
+) {
+    for (entity, mut task) in vlsir_open_task_q.iter_mut() {
+        if let Some(vlsir_lib) = future::block_on(future::poll_once(&mut *task)) {
+            lib.lib = Some(vlsir_lib);
+            vlsir_open_lib_complete_event_writer.send(OpenVlsirLibCompleteEvent);
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+pub fn vlsir_open_task_duration_system(
+    vlsir_lib: Res<VlsirLib>,
+    time: Res<Time>,
+    mut duration: Local<f64>,
+    mut vlsir_open_lib_event_reader: EventReader<OpenVlsirLibEvent>,
+    mut vlsir_open_lib_complete_event_reader: EventReader<OpenVlsirLibCompleteEvent>,
+) {
+    for _ in vlsir_open_lib_event_reader.iter() {
+        *duration = time.seconds_since_startup();
+    }
+
+    for _ in vlsir_open_lib_complete_event_reader.iter() {
+        info!(
+            "Vlisr open lib file '{}' task duration {:?}",
+            vlsir_lib.path.as_ref().unwrap(),
+            time.seconds_since_startup() - *duration
+        );
+    }
+}
+
+pub fn import_lib_system(
+    mut vlsir_lib: ResMut<VlsirLib>,
+    mut vlsir_open_lib_complete_event_reader: EventReader<OpenVlsirLibCompleteEvent>,
+    mut import_lib_complete_event_writer: EventWriter<ImportLibCompleteEvent>,
     mut load_cell_event_writer: EventWriter<LoadCellEvent>,
 ) {
-    for LoadLibEvent { lib } in load_proto_event_reader.iter() {
-        let t = std::time::Instant::now();
-
-        let lib: Library = vlsir::open(lib).unwrap();
+    for _ in vlsir_open_lib_complete_event_reader.iter() {
+        let lib = vlsir_lib.lib.as_ref().unwrap();
 
         let cells = lib
             .cells
@@ -152,18 +213,9 @@ pub fn load_proto_lib_system(
             longest
         );
 
-        let lib = Some(lib);
+        vlsir_lib.cells = cells;
 
-        *proto_gds_lib = ProtoGdsLib {
-            lib,
-            cells,
-            selected: 0,
-        };
-
-        let d = t.elapsed();
-        info!("Layout21 Proto import file open task duration {:?}", d);
-
-        load_lib_complete_event_writer.send(LoadLibCompleteEvent);
+        import_lib_complete_event_writer.send(ImportLibCompleteEvent);
         load_cell_event_writer.send(LoadCellEvent(0));
     }
 }
@@ -171,10 +223,10 @@ pub fn load_proto_lib_system(
 pub fn despawn_all_shapes_system(
     mut commands: Commands,
     query: Query<Entity, With<entity::Path>>,
-    mut load_proto_event_reader: EventReader<LoadLibEvent>,
+    mut vlsir_open_lib_event_reader: EventReader<OpenVlsirLibEvent>,
     mut load_cell_event_reader: EventReader<LoadCellEvent>,
 ) {
-    for _ in load_proto_event_reader.iter() {
+    for _ in vlsir_open_lib_event_reader.iter() {
         for e in query.iter() {
             commands.entity(e).despawn();
         }
@@ -186,8 +238,8 @@ pub fn despawn_all_shapes_system(
     }
 }
 
-pub fn load_proto_cell_system(
-    proto_gds_lib: Res<ProtoGdsLib>,
+pub fn load_cell_system(
+    vlisr_lib: Res<VlsirLib>,
     mut layer_colors: ResMut<LayerColors>,
     mut load_cell_event_reader: EventReader<LoadCellEvent>,
     mut load_cell_complete_event_writer: EventWriter<LoadCellCompleteEvent>,
@@ -196,104 +248,113 @@ pub fn load_proto_cell_system(
     mut import_path_event_writer: EventWriter<ImportPathEvent>,
 ) {
     for &cell_idx in load_cell_event_reader.iter() {
-        let t = std::time::Instant::now();
+        if let Some(lib) = vlisr_lib.lib.as_ref() {
+            let t = std::time::Instant::now();
 
-        let mut viewport_dimensions = ViewportDimensions::default();
+            let mut viewport_dimensions = ViewportDimensions::default();
 
-        // oscibear.proto
-        // let cell = plib.cells.iter().nth(770).unwrap();
-        // dff_lib.proto
-        // let cell = plib.cells.iter().nth(0).unwrap();
+            // oscibear.proto
+            // let cell = plib.cells.iter().nth(770).unwrap();
+            // dff_lib.proto
+            // let cell = plib.cells.iter().nth(0).unwrap();
 
-        let cell = &proto_gds_lib.lib.as_ref().unwrap().cells[*cell_idx];
+            let cell = &lib.cells[*cell_idx];
 
-        let num_shapes = get_shapes(cell)
-            .map(|s| s.rectangles.len() + s.polygons.len() + s.paths.len())
-            .sum::<usize>();
+            let num_shapes = get_shapes(cell)
+                .map(|s| s.rectangles.len() + s.polygons.len() + s.paths.len())
+                .sum::<usize>();
 
-        info!("Cell: {}, num shapes: {num_shapes}", cell.name);
+            info!("Cell: {}, num shapes: {num_shapes}", cell.name);
 
-        for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter() {
-            let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
-            let color = layer_colors.get_color();
+            for layer_shapes in cell.layout.as_ref().unwrap().shapes.iter() {
+                let layer = layer_shapes.layer.as_ref().unwrap().number as u16;
+                let color = layer_colors.get_color();
 
-            for rect in layer_shapes.rectangles.iter() {
-                let raw::Rectangle {
-                    lower_left,
-                    width,
-                    height,
-                    ..
-                } = rect;
-                let raw::Point { x, y } = lower_left.as_ref().unwrap();
+                for rect in layer_shapes.rectangles.iter() {
+                    let raw::Rectangle {
+                        lower_left,
+                        width,
+                        height,
+                        ..
+                    } = rect;
+                    let raw::Point { x, y } = lower_left.as_ref().unwrap();
 
-                viewport_dimensions = ViewportDimensions {
-                    x_min: *x,
-                    x_max: x + width,
-                    y_min: *y,
-                    y_max: y + height,
-                };
+                    viewport_dimensions = ViewportDimensions {
+                        x_min: *x,
+                        x_max: x + width,
+                        y_min: *y,
+                        y_max: y + height,
+                    };
 
-                import_rect_event_writer.send(ImportRectEvent {
-                    rect: rect.clone(),
-                    layer,
-                    color,
-                });
+                    info!("{viewport_dimensions:?}");
+
+                    import_rect_event_writer.send(ImportRectEvent {
+                        rect: rect.clone(),
+                        layer,
+                        color,
+                    });
+                }
+
+                for poly in layer_shapes.polygons.iter() {
+                    let raw::Polygon { vertices, .. } = poly;
+
+                    viewport_dimensions.update(
+                        &(vertices.iter().fold(
+                            ViewportDimensions::default(),
+                            |mut vd, p: &raw::Point| {
+                                let raw::Point { x, y } = p;
+                                vd.x_min = vd.x_min.min(*x);
+                                vd.x_max = vd.x_max.max(*x);
+                                vd.y_min = vd.y_min.min(*y);
+                                vd.y_max = vd.y_max.max(*y);
+                                vd
+                            },
+                        )),
+                    );
+
+                    info!("{viewport_dimensions:?}");
+
+                    import_poly_event_writer.send(ImportPolyEvent {
+                        poly: poly.clone(),
+                        layer,
+                        color,
+                    });
+                }
+
+                for path in layer_shapes.paths.iter() {
+                    let raw::Path { points, .. } = path;
+
+                    viewport_dimensions.update(
+                        &(points.iter().fold(
+                            ViewportDimensions::default(),
+                            |mut vd, p: &raw::Point| {
+                                let raw::Point { x, y } = p;
+                                vd.x_min = vd.x_min.min(*x);
+                                vd.x_max = vd.x_max.max(*x);
+                                vd.y_min = vd.y_min.min(*y);
+                                vd.y_max = vd.y_max.max(*y);
+                                vd
+                            },
+                        )),
+                    );
+
+                    info!("{viewport_dimensions:?}");
+
+                    import_path_event_writer.send(ImportPathEvent {
+                        path: path.clone(),
+                        layer,
+                        color,
+                    });
+                }
             }
 
-            for poly in layer_shapes.polygons.iter() {
-                let raw::Polygon { vertices, .. } = poly;
+            load_cell_complete_event_writer.send(LoadCellCompleteEvent {
+                viewport_dimensions,
+            });
 
-                viewport_dimensions.update(
-                    &(vertices.iter().fold(
-                        ViewportDimensions::default(),
-                        |mut vd, p: &raw::Point| {
-                            let raw::Point { x, y } = p;
-                            vd.x_min = vd.x_min.min(*x);
-                            vd.x_max = vd.x_max.max(*x);
-                            vd.y_min = vd.y_min.min(*y);
-                            vd.y_max = vd.y_max.min(*y);
-                            vd
-                        },
-                    )),
-                );
-                import_poly_event_writer.send(ImportPolyEvent {
-                    poly: poly.clone(),
-                    layer,
-                    color,
-                });
-            }
-
-            for path in layer_shapes.paths.iter() {
-                let raw::Path { points, .. } = path;
-
-                viewport_dimensions.update(
-                    &(points.iter().fold(
-                        ViewportDimensions::default(),
-                        |mut vd, p: &raw::Point| {
-                            let raw::Point { x, y } = p;
-                            vd.x_min = vd.x_min.min(*x);
-                            vd.x_max = vd.x_max.max(*x);
-                            vd.y_min = vd.y_min.min(*y);
-                            vd.y_max = vd.y_max.min(*y);
-                            vd
-                        },
-                    )),
-                );
-
-                import_path_event_writer.send(ImportPathEvent {
-                    path: path.clone(),
-                    layer,
-                    color,
-                });
-            }
+            let d = t.elapsed();
+            info!("Total Layout21 Proto import duration {:?}", d);
         }
-
-        load_cell_complete_event_writer.send(LoadCellCompleteEvent {
-            viewport_dimensions,
-        });
-
-        let d = t.elapsed();
-        info!("Total Layout21 Proto import duration {:?}", d);
     }
 }
 

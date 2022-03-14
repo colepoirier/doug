@@ -18,6 +18,7 @@ lyon_geom = "0.17.6"
 layout21 = { git = "https://github.com/dan-fritchman/Layout21.git" }
 vlsir = "0.2.1"
 rfd = "0.8.1"
+futures-lite = "1.11.3"
 
 [dependencies.bevy]
 version = "0.6.1"
