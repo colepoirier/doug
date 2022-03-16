@@ -35,9 +35,9 @@ pub fn file_menu_system(
     egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
         // The top panel is often a good place for a menu bar:
         egui::menu::bar(ui, |ui| {
-            egui::menu::menu_button(ui, "File", |ui| {
-                ui.style_mut().body_text_style = egui::TextStyle::Heading;
-                if ui.button("Load").clicked() {
+            egui::menu::menu_button(ui, egui::RichText::new("File").size(17.0), |ui| {
+                ui.spacing_mut().button_padding = (8.0, 8.0).into();
+                if ui.button(egui::RichText::new("Load").size(16.0)).clicked() {
                     ui.close_menu();
                     let path = FileDialog::new()
                         .add_filter("protos", &["proto"])
@@ -58,7 +58,7 @@ pub fn file_menu_system(
                         open_vlsir_lib_event_writer.send(OpenVlsirLibEvent);
                     }
                 }
-                if ui.button("Quit").clicked() {
+                if ui.button(egui::RichText::new("Quit").size(16.0)).clicked() {
                     std::process::exit(0);
                 }
             });
@@ -91,13 +91,12 @@ pub fn lib_info_cell_picker_system(
             if vlsir_lib.path.is_none() {
                 ui.label(format!("Current Library:"));
             } else if loading_state.loading {
-                ui.label(format!("Current Library:"));
-                // ui.add_space(4.0);
-                ui.add(
-                    egui::ProgressBar::new(0.99)
-                        .text(format!("Loading {}...", vlsir_lib.name.as_ref().unwrap()))
-                        .animate(true),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(format!("Current Library:"));
+                    ui.add_space(4.0);
+                    ui.label(format!("Loading {}...", vlsir_lib.name.as_ref().unwrap()));
+                    ui.add(egui::Spinner::new());
+                });
             } else if vlsir_lib.path.is_some() && vlsir_lib.lib.is_some() {
                 ui.label(format!(
                     "Current Library: {}",
