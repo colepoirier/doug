@@ -1,34 +1,29 @@
-use crate::{InLayer, Nom};
-use bevy::prelude::{Bundle, Component, IVec2};
+use crate::{import::Net, InLayer};
+use bevy::prelude::{Bundle, Component};
 use bevy_prototype_lyon::entity;
-use vlsir::Point;
+use derive_more::{Deref, DerefMut};
+use layout21raw;
 
 #[derive(Component, Default, Bundle)]
 pub struct ShapeBundle {
-    pub name: Nom,
+    pub net: Net,
     pub layer: InLayer,
     #[bundle]
     pub shape_lyon: entity::ShapeBundle,
 }
 
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct Rect {
-    pub width: u32,
-    pub height: u32,
-    pub origin: IVec2,
-}
+#[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
+pub struct Rect(pub layout21raw::Rect);
 
-#[derive(Component, Default, Bundle)]
+#[derive(Default, Bundle)]
 pub struct RectBundle {
     pub rect: Rect,
     #[bundle]
     pub shape: ShapeBundle,
 }
 
-#[derive(Component, Debug, Default, Clone)]
-pub struct Poly {
-    pub verts: Vec<Point>,
-}
+#[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
+pub struct Poly(pub layout21raw::Polygon);
 
 #[derive(Component, Default, Bundle)]
 pub struct PolyBundle {
@@ -37,10 +32,8 @@ pub struct PolyBundle {
     pub shape: ShapeBundle,
 }
 
-#[derive(Component, Debug, Clone, Default)]
-pub struct Path {
-    pub verts: Vec<Point>,
-}
+#[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
+pub struct Path(pub layout21raw::Path);
 
 #[derive(Component, Default, Bundle)]
 pub struct PathBundle {

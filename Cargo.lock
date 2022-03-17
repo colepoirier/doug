@@ -206,6 +206,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97342ea2f3bad36be2ded1d1fbd569ff83147b70697f12f1579e87a7480afa36"
 dependencies = [
+ "bevy_dylib",
  "bevy_internal",
 ]
 
@@ -350,6 +351,15 @@ dependencies = [
  "bevy_ecs",
  "bevy_log",
  "bevy_utils",
+]
+
+[[package]]
+name = "bevy_dylib"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37e4fbd14b69af53cd9638c1071b74a3f66fc2ae826fa7c8f02ff15a65d65fd3"
+dependencies = [
+ "bevy_internal",
 ]
 
 [[package]]
@@ -1317,7 +1327,6 @@ checksum = "bd0c93bb4b0c6d9b77f4435b0ae98c24d17f1c45b2ff844c6151a07256ca923b"
 name = "doug"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui 0.12.1",
@@ -1325,11 +1334,9 @@ dependencies = [
  "bevy_prototype_lyon",
  "derive_more",
  "futures-lite",
- "layout21",
+ "layout21raw",
  "lyon_algorithms",
  "lyon_geom",
- "num-traits",
- "prost 0.9.0",
  "rfd",
  "vlsir",
 ]
@@ -1614,7 +1621,6 @@ dependencies = [
 [[package]]
 name = "gds21"
 version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
 dependencies = [
  "byteorder",
  "chrono",
@@ -1626,7 +1632,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -1989,22 +1994,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "layout21"
-version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
-dependencies = [
- "gds21",
- "layout21protos",
- "layout21raw",
- "layout21tetris",
- "layout21utils",
- "lef21",
-]
-
-[[package]]
 name = "layout21protos"
 version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
 dependencies = [
  "vlsir",
 ]
@@ -2012,7 +2003,6 @@ dependencies = [
 [[package]]
 name = "layout21raw"
 version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
 dependencies = [
  "enum_dispatch",
  "gds21",
@@ -2027,26 +2017,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "layout21tetris"
-version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
-dependencies = [
- "derive_builder",
- "derive_more",
- "layout21protos",
- "layout21raw",
- "layout21utils",
- "num-integer",
- "num-traits",
- "serde",
- "serde_derive",
- "slotmap",
-]
-
-[[package]]
 name = "layout21utils"
 version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
 dependencies = [
  "by_address",
  "serde",
@@ -2066,7 +2038,6 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "lef21"
 version = "0.2.1"
-source = "git+https://github.com/dan-fritchman/Layout21.git#f7ccfc02e78fa9126723d7bcf40533ae8f55eb97"
 dependencies = [
  "derive_builder",
  "derive_more",
@@ -2696,16 +2667,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
-dependencies = [
- "bytes 1.1.0",
- "prost-derive 0.9.0",
-]
-
-[[package]]
 name = "prost-build"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2741,19 +2702,6 @@ name = "prost-derive"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
-dependencies = [
- "anyhow",
- "itertools 0.10.3",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
 dependencies = [
  "anyhow",
  "itertools 0.10.3",

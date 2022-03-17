@@ -26,42 +26,17 @@ pub const WIDTH: f32 = 10.0;
 pub const DEFAULT_SCALE: f32 = 10e-2;
 pub const DEFAULT_UNITS: f32 = 10e-9;
 
-#[derive(Component, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Nom(String);
-
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ViewportDimensions {
     pub x_min: i64,
     pub x_max: i64,
     pub y_min: i64,
     pub y_max: i64,
-}
-
-impl ViewportDimensions {
-    pub fn update(&mut self, other: &Self) {
-        self.x_min = self.x_min.min(other.x_min);
-        self.x_max = self.x_max.max(other.x_max);
-
-        self.y_min = self.y_min.min(other.y_min);
-        self.y_max = self.y_max.max(other.y_max);
-    }
+    pub center: layout21raw::Point,
 }
 
 #[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
 pub struct CursorWorldPos(pub IVec2);
-
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct Layer;
-
-#[derive(Component, Debug, Default, Bundle, Clone, Copy)]
-pub struct LayerBundle {
-    pub layer: Layer,
-    pub num: LayerNum,
-    pub color: LayerColor,
-}
-
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct LayerColor(pub Color);
 
 #[derive(Component, Debug, Clone, Deref, DerefMut)]
 pub struct InLayer(pub u16);
@@ -77,8 +52,10 @@ impl Default for InLayer {
 )]
 pub struct LayerNum(pub u16);
 
-#[derive(Debug, Default, Component)]
-pub struct UpdateViewportEvent;
+#[derive(Debug, Default, Clone, Copy)]
+pub struct UpdateViewportEvent {
+    pub viewport: ViewportDimensions,
+}
 
 fn main() {
     App::new()
@@ -124,6 +101,64 @@ fn setup_system(mut commands: Commands) {
     commands.spawn_bundle(camera);
 }
 
+pub fn update_camera_viewport_system(
+    mut viewport_dimensions: ResMut<ViewportDimensions>,
+    windows: Res<Windows>,
+    mut update_viewport_event_reader: EventReader<UpdateViewportEvent>,
+    mut camera_q: Query<(&mut Transform, &Camera)>,
+) {
+    for UpdateViewportEvent { viewport } in update_viewport_event_reader.iter() {
+        let (mut cam_t, cam) = camera_q.single_mut();
+
+        *viewport_dimensions = *viewport;
+
+        let ViewportDimensions {
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+            center,
+        } = *viewport;
+
+        info!("[x] min: {x_min}, max: {x_max} [y] min: {y_min}, max: {y_max}",);
+
+        let width = (x_max - x_min) as f32;
+        let height = (y_max - y_min) as f32;
+
+        info!("width: {width}, height: {height}");
+
+        let padding = 100.0;
+
+        let window = windows.get(cam.window).unwrap();
+
+        let screen_width = window.width() - (2.0 * padding);
+        let screen_height = window.height() - (2.0 * padding);
+
+        let width_ratio = width / screen_width;
+        let height_ratio = height / screen_height;
+
+        info!("width/viewport_width: {width_ratio}, height/viewport_height: {height_ratio}");
+
+        let scale = width_ratio.max(height_ratio);
+
+        let world_width = screen_width * scale;
+        let world_height = screen_height * scale;
+
+        info!("world_width: {world_width}, world_height: {world_height}");
+
+        cam_t.scale.x = scale;
+        cam_t.scale.y = scale;
+
+        // let x_min = x_min as f32;
+        // let x_max = x_max as f32;
+        // let y_min = y_min as f32;
+        // let y_max = y_max as f32;
+
+        cam_t.translation.x = center.x as f32;
+        cam_t.translation.y = center.y as f32;
+    }
+}
+
 pub fn pan_zoom_camera_system(
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
@@ -165,81 +200,6 @@ pub fn pan_zoom_camera_system(
 fn camera_changed_system(camera_q: Query<&Transform, (Changed<Transform>, With<Camera>)>) {
     for c in camera_q.iter() {
         info!("Camera new transform {:?}", c);
-    }
-}
-
-// from the removed impl for f32 in std: library/std/src/f32.rs
-pub fn lerp(num: f32, start: f32, end: f32) -> f32 {
-    // consistent
-    if start == end {
-        start
-
-    // exact/monotonic
-    } else {
-        num.mul_add(end, (-num).mul_add(start, start))
-    }
-}
-
-pub fn update_camera_viewport_system(
-    mut update_viewport_event_reader: EventReader<UpdateViewportEvent>,
-    viewport: Res<ViewportDimensions>,
-    windows: Res<Windows>,
-    mut camera_q: Query<(&mut Transform, &Camera)>,
-) {
-    for _ in update_viewport_event_reader.iter() {
-        let (mut cam_t, cam) = camera_q.single_mut();
-
-        let ViewportDimensions {
-            x_min,
-            x_max,
-            y_min,
-            y_max,
-        } = *viewport;
-
-        info!("[x] min: {x_min}, max: {x_max} [y] min: {y_min}, max: {y_max}",);
-
-        let width = (x_max - x_min) as f32;
-        let height = (y_max - y_min) as f32;
-
-        info!("width: {width}, height: {height}");
-
-        let padding = 100.0;
-
-        let window = windows.get(cam.window).unwrap();
-
-        let screen_width = window.width() - (2.0 * padding);
-        let screen_height = window.height() - (2.0 * padding);
-
-        let width_ratio = width / screen_width;
-        let height_ratio = height / screen_height;
-
-        info!("width/viewport_width: {width_ratio}, height/viewport_height: {height_ratio}");
-
-        let scale = width_ratio.max(height_ratio);
-
-        let world_width = screen_width * scale;
-        let world_height = screen_height * scale;
-
-        info!("world_width: {world_width}, world_height: {world_height}");
-
-        cam_t.scale.x = scale;
-        cam_t.scale.y = scale;
-
-        let x_min = x_min as f32;
-        let x_max = x_max as f32;
-        let y_min = y_min as f32;
-        let y_max = y_max as f32;
-
-        cam_t.translation.x = if x_min >= 0.0 {
-            (x_max - x_min) / 2.0
-        } else {
-            (x_max + x_min) / 2.0
-        };
-        cam_t.translation.y = if y_min >= 0.0 {
-            y_min + (height / 2.0)
-        } else {
-            (y_max + y_min) / 2.0
-        };
     }
 }
 

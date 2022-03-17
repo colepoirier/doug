@@ -1,4 +1,6 @@
-use crate::import::{ImportLibCompleteEvent, LoadCellEvent, OpenVlsirLibEvent, VlsirLib};
+use crate::import::{
+    ImportLibCompleteEvent, LoadCellEvent, OpenVlsirLibEvent, VlsirCell, VlsirLib,
+};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 use rfd::FileDialog;
@@ -29,7 +31,6 @@ impl Plugin for UIPlugin {
 
 pub fn file_menu_system(
     mut egui_ctx: ResMut<EguiContext>,
-    mut vlsir_lib: ResMut<VlsirLib>,
     mut open_vlsir_lib_event_writer: EventWriter<OpenVlsirLibEvent>,
 ) {
     egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
@@ -44,18 +45,9 @@ pub fn file_menu_system(
                         .pick_file();
                     // handle file picking cancellation by only sending event if a file was selected
                     if let Some(path) = path {
-                        vlsir_lib.path = Some(path.to_str().unwrap().to_owned());
-                        vlsir_lib.name = Some(
-                            path.to_str()
-                                .unwrap()
-                                .split("/")
-                                .last()
-                                .unwrap()
-                                .strip_suffix(".proto")
-                                .unwrap()
-                                .to_owned(),
-                        );
-                        open_vlsir_lib_event_writer.send(OpenVlsirLibEvent);
+                        open_vlsir_lib_event_writer.send(OpenVlsirLibEvent {
+                            path: path.to_str().unwrap().to_owned(),
+                        });
                     }
                 }
                 if ui.button(egui::RichText::new("Quit").size(16.0)).clicked() {
@@ -69,6 +61,7 @@ pub fn file_menu_system(
 pub fn lib_info_cell_picker_system(
     mut egui_ctx: ResMut<EguiContext>,
     vlsir_lib: Res<VlsirLib>,
+    vlsir_cell: Res<VlsirCell>,
     mut open_vlsir_lib_event_reader: EventReader<OpenVlsirLibEvent>,
     mut import_lib_complete_event_reader: EventReader<ImportLibCompleteEvent>,
     mut dropdown_state: ResMut<LibInfoUIDropdownState>,
@@ -94,27 +87,38 @@ pub fn lib_info_cell_picker_system(
                 ui.horizontal(|ui| {
                     ui.label(format!("Current Library:"));
                     ui.add_space(4.0);
-                    ui.label(format!("Loading {}...", vlsir_lib.name.as_ref().unwrap()));
+                    ui.label(format!(
+                        "Loading {}...",
+                        vlsir_lib
+                            .path
+                            .as_ref()
+                            .unwrap()
+                            .split("/")
+                            .last()
+                            .unwrap()
+                            .strip_suffix(".proto")
+                            .unwrap()
+                    ));
                     ui.add(egui::Spinner::new());
                 });
             } else if vlsir_lib.path.is_some() && vlsir_lib.lib.is_some() {
                 ui.label(format!(
                     "Current Library: {}",
-                    vlsir_lib.name.as_ref().unwrap()
+                    vlsir_lib.lib.as_ref().unwrap().name
                 ));
             }
 
             ui.add_space(5.0);
 
-            if vlsir_lib.cells.len() > 0 {
-                let len = vlsir_lib.cells.len();
+            if let Some(names) = &vlsir_lib.cell_names {
+                let len = names.len();
                 ui.horizontal(|ui| {
                     ui.spacing_mut().slider_width = 300.0;
                     ui.add(egui::Label::new("Cells:"));
                     // ui.add_space(1.0);
                     ui.add_enabled_ui(true, |ui| {
                         egui::ComboBox::from_label("")
-                            .show_index(ui, &mut temp, len, |i| vlsir_lib.cells[i].to_owned())
+                            .show_index(ui, &mut temp, len, |i| names[i].to_owned())
                     });
                 });
             } else {
@@ -134,24 +138,9 @@ pub fn lib_info_cell_picker_system(
                 dropdown_state.selected = temp;
             }
 
-            if let Some(lib) = vlsir_lib.lib.as_ref() {
+            if let Some(num_shapes) = vlsir_cell.num_shapes.as_ref() {
                 ui.add_space(5.0);
-                ui.label(format!(
-                    "No. shapes: {}",
-                    lib.cells[dropdown_state.selected]
-                        .layout
-                        .as_ref()
-                        .unwrap()
-                        .shapes
-                        .iter()
-                        .fold(0, |len, layer| {
-                            let mut tot = 0;
-                            tot += layer.rectangles.len();
-                            tot += layer.polygons.len();
-                            tot += layer.paths.len();
-                            len + tot
-                        })
-                ));
+                ui.label(format!("No. shapes: {num_shapes}"));
             }
         });
 }

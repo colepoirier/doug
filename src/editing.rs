@@ -1,11 +1,11 @@
 use crate::{
-    shapes,
-    shapes::{Poly, Rect},
-    CursorWorldPos, InLayer, Nom, ALPHA,
+    import::Net,
+    shapes::{Path, Poly, Rect},
+    CursorWorldPos, InLayer, ALPHA,
 };
 use bevy::prelude::*;
 use bevy_prototype_lyon::plugin::ShapePlugin;
-use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path};
+use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path as LyonPath};
 
 use lyon_algorithms::hit_test::hit_test_path;
 use lyon_geom::Translation;
@@ -73,9 +73,9 @@ impl PartialOrd for TopShape {
 pub fn cursor_hover_system(
     mut commands: Commands,
     cursor_pos: Res<CursorWorldPos>,
-    rect_q: Query<(Entity, &Path, &Transform, &InLayer), With<Rect>>,
-    poly_q: Query<(Entity, &Path, &Transform, &InLayer), With<Poly>>,
-    path_q: Query<(Entity, &Path, &Transform, &InLayer), With<shapes::Path>>,
+    rect_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Rect>>,
+    poly_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Poly>>,
+    path_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Path>>,
     hovered_q: Query<Entity, With<Hovered>>,
 ) {
     if cursor_pos.is_changed() {
@@ -231,13 +231,13 @@ pub fn unhighlight_deselected_system(
     }
 }
 
-pub fn print_hovered_info_system(query: Query<(Entity, &Nom, &InLayer), Added<Hovered>>) {
+pub fn print_hovered_info_system(query: Query<(Entity, &Net, &InLayer), Added<Hovered>>) {
     for (e, net, layer) in query.iter() {
         info!("Hovered: entity: {e:?}, net: {net:?}, layer: {layer:?}.");
     }
 }
 
-pub fn print_selected_info_system(query: Query<(Entity, &Nom, &InLayer), Added<Selected>>) {
+pub fn print_selected_info_system(query: Query<(Entity, &Net, &InLayer), Added<Selected>>) {
     for (e, net, layer) in query.iter() {
         info!("Selected: entity: {e:?}, net: {net:?}, layer: {layer:?}.");
     }
