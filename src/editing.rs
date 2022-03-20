@@ -183,16 +183,59 @@ pub fn select_clicked_system(
     hovered_q: Query<Entity, With<Hovered>>,
     selected_q: Query<Entity, With<Selected>>,
     mouse_click: Res<Input<MouseButton>>,
+    keyboard: Res<Input<KeyCode>>,
 ) {
     if mouse_click.just_pressed(MouseButton::Left) {
-        for selected in selected_q.iter() {
-            commands.entity(selected).remove::<Selected>();
+        if hovered_q.is_empty() {
+            for selected in selected_q.iter() {
+                commands.entity(selected).remove::<Selected>();
+            }
         }
+
         for hovered in hovered_q.iter() {
-            if selected_q.get(hovered).is_ok() {
-                commands.entity(hovered).remove::<Selected>();
-            } else {
-                commands.entity(hovered).insert(Selected);
+            // logic if the user is holding the LAlt key
+            if keyboard.pressed(KeyCode::LAlt) {
+                // if the hovered shape that was clicked is already selected, deselect it
+                if selected_q.get(hovered).is_ok() {
+                    commands.entity(hovered).remove::<Selected>();
+                }
+                // if the hoverered shape that was clicked is not already selected, select it
+                else {
+                    // mark the shape that was hovered when the click happened as selected
+                    commands.entity(hovered).insert(Selected);
+                }
+            }
+            // logic if the user is not holding the LAlt key
+            else {
+                // if there are multiple shapes currently selected (from a previous LAlt held state)
+                // deselect all except the the clicked shape
+                if !selected_q.is_empty() && selected_q.get_single().is_err() {
+                    // deselect all previously selected shapes before marking the
+                    // shape that was hovered when the click happened as selected
+                    for selected in selected_q.iter() {
+                        // remove the Selected marker component from all shapes except for the clicked shape
+                        if hovered_q.get(selected).is_err() {
+                            commands.entity(selected).remove::<Selected>();
+                        }
+                    }
+                }
+                // if there is exactly one shape currently selected when the click happened
+                else {
+                    // if the hovered shape that was clicked is already selected, deselect it
+                    if selected_q.get(hovered).is_ok() {
+                        commands.entity(hovered).remove::<Selected>();
+                    }
+                    // if the hoverered shape that was clicked is not already selected, select it
+                    else {
+                        // deselect all previously selected shapes before marking the
+                        // shape that was hovered when the click happened as selected
+                        for selected in selected_q.iter() {
+                            commands.entity(selected).remove::<Selected>();
+                        }
+                        // mark the shape that was hovered when the click happened as selected
+                        commands.entity(hovered).insert(Selected);
+                    }
+                }
             }
         }
     }
