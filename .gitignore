@@ -2,8 +2,5 @@
 *.proto
 *.gds
 *.bin
-*.zst
-dictionary
-*.dict
 .cargo/*
 config.toml
