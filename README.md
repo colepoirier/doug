@@ -1,5 +1,3 @@
-# Doug
-
 Doug is a WIP semi-automated to full manual VLSI Analog and Mixed Signal CAD design tool built with [Bevy](https://github.com/bevyengine/bevy) (an in-development rust game engine) and Dan Fritchman's excellent rust VLSI library [Layout21](https://github.com/dan-fritchman/Layout21).
 
 ### Usage instructions
