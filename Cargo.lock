@@ -1621,6 +1621,7 @@ dependencies = [
 [[package]]
 name = "gds21"
 version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
 dependencies = [
  "byteorder",
  "chrono",
@@ -1996,6 +1997,7 @@ dependencies = [
 [[package]]
 name = "layout21protos"
 version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
 dependencies = [
  "vlsir",
 ]
@@ -2003,6 +2005,7 @@ dependencies = [
 [[package]]
 name = "layout21raw"
 version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
 dependencies = [
  "enum_dispatch",
  "gds21",
@@ -2019,6 +2022,7 @@ dependencies = [
 [[package]]
 name = "layout21utils"
 version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
 dependencies = [
  "by_address",
  "serde",
@@ -2038,6 +2042,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "lef21"
 version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
 dependencies = [
  "derive_builder",
  "derive_more",
