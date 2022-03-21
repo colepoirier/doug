@@ -4,7 +4,7 @@ Doug is a WIP semi-automated to full manual VLSI Analog and Mixed Signal CAD des
 
 Make sure you compile Doug in release mode by running `cargo r --release`, otherwise you will get ~10x worse performance and the app may be stuttery, freeze a lot, and be generally unpleasant to use.
 
-When the app is finished compiling it will start. Select 'File->Load' and select one of the *.proto files from the 'libs/' directory in this repository. There are currently two GDS library files provided: dff1_lib.proto can be used without doing anything but only contains one cell; oscibear.proto contains dozens of digitial, analog, and mixed-signal designs, and hundreds of smaller cells which the larger designs use, in order to use it you will need to run `zstd -D oscibear_proto_ztd_dict oscibear.proto.zst` and then select the uncompresed proto file in the file picker dialog.
+When the app is finished compiling it will start. Select 'File->Load' and select one of the *.proto files from the 'libs/' directory in this repository. There are currently two GDS library files provided: dff1_lib.proto can be used without doing anything but only contains one cell; oscibear.proto contains dozens of digitial, analog, and mixed-signal designs, and hundreds of smaller cells which the larger designs use, because of this the uncompressed file size is too large to upload to github in-tree; in order to use it you will need to run `zstd -D oscibear_proto_ztd_dict oscibear.proto.zst` and then select the uncompresed proto file in the file picker dialog.
 
 ### Background on the ocscibear.proto library
 
