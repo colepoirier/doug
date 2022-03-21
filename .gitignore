@@ -1,5 +1,5 @@
 /target
-*.proto
+oscibear.proto
 *.gds
 *.bin
 .cargo/*
