@@ -16,10 +16,13 @@ use futures_lite::future;
 
 use derive_more::{Deref, DerefMut};
 
-use layout21raw::{
-    proto::ProtoImporter, BoundBox, BoundBoxTrait, Cell, Element, Library, Point, Shape,
+use layout21::{
+    raw::{
+        self, proto::ProtoImporter, Abstract, BoundBox, BoundBoxTrait, Cell, Element, Instance,
+        Layout, Library, Point, Shape,
+    },
+    utils::Ptr,
 };
-use vlsir;
 
 use std::slice::Iter;
 
@@ -71,10 +74,33 @@ pub struct Layer {
 #[derive(Debug, Default, Clone, Deref, DerefMut)]
 pub struct Layers(HashMap<u16, Layer>);
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct VlsirCell {
     pub index: Option<usize>,
     pub num_shapes: Option<u64>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CellContentsInfo {
+    pub cell_name: String,
+    pub layout: Option<LayoutInfo>,
+    pub abstrakt: Option<AbstraktInfo>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct LayoutInfo {
+    pub layout_name: String,
+    pub elems: usize,
+    pub insts: usize,
+    pub annotations: usize,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AbstraktInfo {
+    pub abstrakt_name: String,
+    pub outline: BoundBox,
+    pub ports: usize,
+    pub blockages: usize,
 }
 
 pub struct Layout21ImportPlugin;
@@ -235,7 +261,7 @@ pub fn import_lib_system(
         {
             let lib_layers = &lib.layers.read().unwrap().slots;
 
-            for layout21raw::Layer { layernum, name, .. } in lib_layers.values() {
+            for raw::Layer { layernum, name, .. } in lib_layers.values() {
                 let num = *layernum as u16;
                 if let Some(_) = layers.insert(
                     num,
@@ -258,15 +284,109 @@ pub fn import_lib_system(
             .map(|c| c.read().unwrap().name.clone())
             .collect::<Vec<String>>();
 
-        info!("Cell Names: {cell_names:?}");
+        // info!("Cell Names: {cell_names:?}");
 
         let longest_name = cell_names.iter().max().unwrap();
 
         info!(
-            "Longest cell name: {} chars, {}",
+            "Longest cell name: {{ len: {} name: {}}}",
             longest_name.chars().count(),
             longest_name
         );
+
+        // let largest_magnitudes = lib
+        //     .cells
+        //     .iter()
+        //     .map(|c| {
+        //         let bbox = c
+        //             .read()
+        //             .unwrap()
+        //             .layout
+        //             .as_ref()
+        //             .unwrap_or(&raw::Layout::default())
+        //             .bbox();
+        //         if bbox.is_empty() {
+        //             (0, 0)
+        //         } else {
+        //             let Point { x: x_min, y: y_min } = bbox.p0;
+        //             let Point { x: x_max, y: y_max } = bbox.p1;
+        //             let x = x_min.abs().max(x_max.abs());
+        //             let y = y_min.abs().max(y_max.abs());
+        //             (x, y)
+        //         }
+        //     })
+        //     .collect::<Vec<(isize, isize)>>();
+
+        let dbg_cell_contents_info = lib
+            .cells
+            .iter()
+            .map(|c| {
+                let c = c.read().unwrap();
+
+                let name = c.name.clone();
+
+                let layout = if let Some(Layout {
+                    annotations,
+                    elems,
+                    insts,
+                    name,
+                }) = c.layout.as_ref()
+                {
+                    Some(LayoutInfo {
+                        layout_name: name.clone(),
+                        elems: elems.len(),
+                        insts: insts.len(),
+                        annotations: annotations.len(),
+                    })
+                } else {
+                    None
+                };
+
+                let abstrakt = if let Some(Abstract {
+                    name,
+                    outline,
+                    ports,
+                    blockages,
+                }) = c.abs.as_ref()
+                {
+                    Some(AbstraktInfo {
+                        abstrakt_name: name.clone(),
+                        outline: outline.inner.bbox(),
+                        ports: ports.len(),
+                        blockages: blockages.values().fold(0, |mut acc, b| {
+                            acc += b.len();
+                            acc
+                        }),
+                    })
+                } else {
+                    None
+                };
+                CellContentsInfo {
+                    cell_name: name.clone(),
+                    layout,
+                    abstrakt,
+                }
+            })
+            .collect::<Vec<CellContentsInfo>>();
+
+        // let mut f = std::fs::File::create(format!("{}_cell_contents", lib.name)).unwrap();
+        // use std::io::Write;
+        // f.write(format!("{dbg_cell_contents_info:#?}").as_bytes())
+        //     .unwrap();
+
+        // let max_magnitudes =
+        //     largest_magnitudes
+        //         .iter()
+        //         .fold(raw::Point::default(), |mut acc, &(x, y)| {
+        //             acc.x = acc.x.max(x);
+        //             acc.y = acc.y.max(y);
+        //             acc
+        //         });
+
+        // let max_x = max_magnitudes.x;
+        // let max_y = max_magnitudes.y;
+
+        // info!("Largest cell extents in this library: [ x: {max_x}, y: {max_y} ]");
 
         vlsir_lib.cell_names = Some(cell_names);
 
@@ -323,22 +443,80 @@ pub fn load_cell_system(
         if let Some(lib) = vlsir_lib.lib.as_ref() {
             let t = std::time::Instant::now();
 
-            let lib_layers = lib.layers.read().unwrap();
+            cell_info.index = Some(*cell_idx);
 
-            let cell = lib.cells[*cell_idx].read().unwrap();
+            let lib_layers = &lib.layers;
 
-            let layout = cell.layout.as_ref().unwrap();
+            let cell = &lib.cells[*cell_idx];
 
-            *cell_info = VlsirCell {
-                index: Some(*cell_idx),
-                num_shapes: Some(layout.elems.len() as u64),
-            };
+            let len_elems = cell.read().unwrap().layout.as_ref().unwrap().elems.len();
+            let len_insts = cell.read().unwrap().layout.as_ref().unwrap().insts.len();
 
-            if layout.elems.len() == 0 {
+            if len_elems == 0 && len_insts == 0 {
                 continue;
             }
 
-            let bbox = layout.bbox();
+            // let mut f = std::fs::File::create("cell_insts_debug").unwrap();
+            // use std::io::Write;
+            // f.write(
+            //     format!(
+            //         "Cell '{}' num_el: {} instances: {:#?}",
+            //         cell.read().unwrap().layout.as_ref().unwrap().name,
+            //         cell.read().unwrap().layout.as_ref().unwrap().elems.len(),
+            //         cell.read().unwrap().layout.as_ref().unwrap().insts
+            //     )
+            //     .as_bytes(),
+            // )
+            // .unwrap();
+
+            let mut shape_count: u64 = 0;
+
+            import_cell_shapes(
+                &cell,
+                false,
+                &mut shape_count,
+                &Point::default(),
+                &mut cell_info,
+                &lib_layers,
+                &layers,
+                &mut update_viewport_event_writer,
+                &mut import_rect_event_writer,
+                &mut import_poly_event_writer,
+                &mut import_path_event_writer,
+            );
+
+            cell_info.num_shapes = Some(shape_count);
+
+            load_cell_complete_event_writer.send(LoadCellCompleteEvent);
+
+            let d = t.elapsed();
+            info!("Total Layout21 Proto import duration {:?}", d);
+        }
+    }
+}
+
+pub fn import_cell_shapes(
+    cell: &Ptr<Cell>,
+    mut bbox_set: bool,
+    shape_count: &mut u64,
+    offset: &Point,
+    cell_info: &mut ResMut<VlsirCell>,
+    lib_layers: &Ptr<raw::Layers>,
+    layers: &Res<Layers>,
+    update_viewport_event_writer: &mut EventWriter<UpdateViewportEvent>,
+    import_rect_event_writer: &mut EventWriter<ImportRectEvent>,
+    import_poly_event_writer: &mut EventWriter<ImportPolyEvent>,
+    import_path_event_writer: &mut EventWriter<ImportPathEvent>,
+) {
+    let read_cell = cell.read().unwrap();
+    let read_lib_layers = lib_layers.read().unwrap();
+
+    let layout = read_cell.layout.as_ref().unwrap();
+
+    let bbox = layout.bbox();
+
+    if !bbox_set {
+        if !bbox.is_empty() {
             let center = bbox.center();
             let Point { x: x_min, y: y_min } = bbox.p0;
             let Point { x: x_max, y: y_max } = bbox.p1;
@@ -352,60 +530,94 @@ pub fn load_cell_system(
                     center,
                 },
             });
-
-            // info!("Cell: {}, num shapes: {num_shapes}", cell.name);
-
-            for Element {
-                net, layer, inner, ..
-            } in layout.elems.iter()
-            {
-                let net = Net(net.clone());
-
-                let layer = lib_layers
-                    .get(*layer)
-                    .expect("This Element's LayerKey does not exist in this Library's Layers")
-                    .layernum as u16;
-
-                let color = layers
-                    .get(&layer)
-                    .expect("This Element's layer num does not exist in our Layers Resource")
-                    .color;
-
-                match inner {
-                    Shape::Rect(r) => {
-                        let BoundBox { p0, p1 } = r.bbox();
-                        let rect = layout21raw::Rect { p0, p1 };
-                        import_rect_event_writer.send(ImportRectEvent {
-                            rect: Rect(rect),
-                            net,
-                            layer,
-                            color,
-                        });
-                    }
-                    Shape::Polygon(p) => {
-                        import_poly_event_writer.send(ImportPolyEvent {
-                            poly: Poly(p.clone()),
-                            net,
-                            layer,
-                            color,
-                        });
-                    }
-                    Shape::Path(p) => {
-                        import_path_event_writer.send(ImportPathEvent {
-                            path: Path(p.clone()),
-                            net,
-                            layer,
-                            color,
-                        });
-                    }
-                }
-            }
-
-            load_cell_complete_event_writer.send(LoadCellCompleteEvent);
-
-            let d = t.elapsed();
-            info!("Total Layout21 Proto import duration {:?}", d);
+            bbox_set = true;
         }
+    }
+
+    for Element {
+        net, layer, inner, ..
+    } in layout.elems.iter()
+    {
+        if *shape_count % 1_000 == 0 {
+            info!("Shapes spawned: {}", shape_count);
+        }
+
+        if *shape_count > 90_000 {
+            return;
+        }
+
+        let net = Net(net.clone());
+
+        let layer = read_lib_layers
+            .get(*layer)
+            .expect("This Element's LayerKey does not exist in this Library's Layers")
+            .layernum as u16;
+
+        let color = layers
+            .get(&layer)
+            .expect("This Element's layer num does not exist in our Layers Resource")
+            .color;
+
+        match inner {
+            Shape::Rect(r) => {
+                let BoundBox { p0, p1 } = r.bbox();
+                let p0 = p0.shift(offset);
+                let p1 = p1.shift(offset);
+
+                let rect = raw::Rect { p0, p1 };
+                import_rect_event_writer.send(ImportRectEvent {
+                    rect: Rect(rect),
+                    net,
+                    layer,
+                    color,
+                });
+            }
+            Shape::Polygon(p) => {
+                let mut p = p.clone();
+                p.points = p.points.iter().map(|p| p.shift(offset)).collect();
+                import_poly_event_writer.send(ImportPolyEvent {
+                    poly: Poly(p.clone()),
+                    net,
+                    layer,
+                    color,
+                });
+            }
+            Shape::Path(p) => {
+                let mut p = p.clone();
+                p.points = p.points.iter().map(|p| p.shift(offset)).collect();
+                import_path_event_writer.send(ImportPathEvent {
+                    path: Path(p.clone()),
+                    net,
+                    layer,
+                    color,
+                });
+            }
+        }
+
+        *shape_count += 1;
+    }
+
+    for Instance {
+        inst_name,
+        cell,
+        loc,
+        reflect_vert,
+        angle,
+    } in layout.insts.iter()
+    {
+        import_cell_shapes(
+            cell,
+            bbox_set,
+            shape_count,
+            loc,
+            cell_info,
+            lib_layers,
+            layers,
+            update_viewport_event_writer,
+            import_rect_event_writer,
+            import_poly_event_writer,
+            import_path_event_writer,
+        );
     }
 }
 
@@ -422,7 +634,7 @@ pub fn import_rect_system(
     {
         let (width, height) = (*rect).bbox().size();
 
-        let layout21raw::Rect {
+        let raw::Rect {
             p0: bottom_left, ..
         } = **rect;
 
@@ -566,7 +778,7 @@ pub fn import_path_system(
 
 #[cfg(test)]
 mod tests {
-    use layout21raw::{
+    use layout21::raw::{
         gds::gds21::GdsLibrary, gds::GdsImporter, proto::ProtoExporter, LayoutResult,
     };
     use vlsir::save;

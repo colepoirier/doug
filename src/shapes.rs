@@ -2,7 +2,7 @@ use crate::{import::Net, InLayer};
 use bevy::prelude::{Bundle, Component};
 use bevy_prototype_lyon::entity;
 use derive_more::{Deref, DerefMut};
-use layout21raw;
+use layout21::raw;
 
 #[derive(Component, Default, Bundle)]
 pub struct ShapeBundle {
@@ -13,7 +13,7 @@ pub struct ShapeBundle {
 }
 
 #[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
-pub struct Rect(pub layout21raw::Rect);
+pub struct Rect(pub raw::Rect);
 
 #[derive(Default, Bundle)]
 pub struct RectBundle {
@@ -23,7 +23,7 @@ pub struct RectBundle {
 }
 
 #[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
-pub struct Poly(pub layout21raw::Polygon);
+pub struct Poly(pub raw::Polygon);
 
 #[derive(Component, Default, Bundle)]
 pub struct PolyBundle {
@@ -33,7 +33,7 @@ pub struct PolyBundle {
 }
 
 #[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
-pub struct Path(pub layout21raw::Path);
+pub struct Path(pub raw::Path);
 
 #[derive(Component, Default, Bundle)]
 pub struct PathBundle {
