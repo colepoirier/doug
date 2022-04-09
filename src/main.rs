@@ -5,12 +5,14 @@ pub mod ui;
 
 use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
-use bevy::input::mouse::{MouseMotion, MouseWheel};
+use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::render::camera::Camera;
 use bevy::{prelude::*, render::camera::ScalingMode};
 
 use bevy_egui::EguiContext;
 use derive_more::{Deref, DerefMut};
+
+use layout21::raw;
 
 // use bevy_framepace::{FramepacePlugin, FramerateLimit};
 // use bevy_inspector_egui::WorldInspectorPlugin;
@@ -32,7 +34,7 @@ pub struct ViewportDimensions {
     pub x_max: i64,
     pub y_min: i64,
     pub y_max: i64,
-    pub center: layout21raw::Point,
+    pub center: raw::Point,
 }
 
 #[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
@@ -89,7 +91,8 @@ fn main() {
         )
         .add_startup_system(setup_system)
         .add_system_to_stage("camera_change", update_camera_viewport_system)
-        .add_system_to_stage("camera_change", pan_zoom_camera_system)
+        .add_system_to_stage("camera_change", camera_zoom_system)
+        .add_system_to_stage("camera_change", camera_pan_system)
         .add_system_to_stage("detect_camera_change", camera_changed_system)
         .add_system(cursor_world_pos_system)
         .run();
@@ -102,13 +105,13 @@ fn setup_system(mut commands: Commands) {
 }
 
 pub fn update_camera_viewport_system(
-    mut viewport_dimensions: ResMut<ViewportDimensions>,
     windows: Res<Windows>,
     mut update_viewport_event_reader: EventReader<UpdateViewportEvent>,
-    mut camera_q: Query<(&mut Transform, &Camera)>,
+    mut viewport_dimensions: ResMut<ViewportDimensions>,
+    mut camera_q: Query<(&mut Transform, &mut OrthographicProjection, &Camera)>,
 ) {
     for UpdateViewportEvent { viewport } in update_viewport_event_reader.iter() {
-        let (mut cam_t, cam) = camera_q.single_mut();
+        let (mut cam_t, mut proj, cam) = camera_q.single_mut();
 
         *viewport_dimensions = *viewport;
 
@@ -146,54 +149,73 @@ pub fn update_camera_viewport_system(
 
         info!("world_width: {world_width}, world_height: {world_height}");
 
-        cam_t.scale.x = scale;
-        cam_t.scale.y = scale;
-
-        // let x_min = x_min as f32;
-        // let x_max = x_max as f32;
-        // let y_min = y_min as f32;
-        // let y_max = y_max as f32;
+        proj.scale = scale;
 
         cam_t.translation.x = center.x as f32;
         cam_t.translation.y = center.y as f32;
     }
 }
 
-pub fn pan_zoom_camera_system(
-    mut ev_motion: EventReader<MouseMotion>,
-    mut ev_scroll: EventReader<MouseWheel>,
+fn camera_zoom_system(
+    mut query: Query<&mut OrthographicProjection>,
+    mut scroll_events: EventReader<MouseWheel>,
+    mut egui_ctx: ResMut<EguiContext>,
+) {
+    if !egui_ctx.ctx_mut().wants_pointer_input() {
+        // code taken from the excellent bevy_pancam plugin
+        // https://web.archive.org/web/20220402030829/https://github.com/johanhelsing/bevy_pancam
+        let pixels_per_line = 100.0; // Maybe make configurable?
+        let scroll = scroll_events
+            .iter()
+            .map(|ev| match ev.unit {
+                MouseScrollUnit::Pixel => ev.y,
+                MouseScrollUnit::Line => ev.y * pixels_per_line,
+            })
+            .sum::<f32>();
+
+        if scroll == 0.0 {
+            return;
+        }
+
+        for mut projection in query.iter_mut() {
+            projection.scale = (projection.scale * (1. + -scroll * 0.001)).max(0.00001);
+        }
+    }
+}
+
+pub fn camera_pan_system(
     input_mouse: Res<Input<MouseButton>>,
     mut egui_ctx: ResMut<EguiContext>,
-    mut q_camera: Query<&mut Transform, With<Camera>>,
+    mut cam_q: Query<(&mut Transform, &OrthographicProjection)>,
+    windows: Res<Windows>,
+    mut last_pos: Local<Option<Vec2>>,
 ) {
     // change input mapping for panning here.
     let pan_button = MouseButton::Left;
 
-    let mut pan = Vec2::ZERO;
-    let mut scroll = 0.0;
-
     if !egui_ctx.ctx_mut().wants_pointer_input() {
-        if input_mouse.pressed(pan_button) {
-            for ev in ev_motion.iter() {
-                pan += ev.delta;
+        // code taken from the excellent bevy_pancam plugin
+        // https://web.archive.org/web/20220402030829/https://github.com/johanhelsing/bevy_pancam
+        let window = windows.get_primary().unwrap();
+
+        // Use position instead of MouseMotion, otherwise we don't get acceleration movement
+        let current_pos = match window.cursor_position() {
+            Some(current_pos) => current_pos,
+            None => return,
+        };
+        let delta = current_pos - last_pos.unwrap_or(current_pos);
+
+        for (mut transform, projection) in cam_q.iter_mut() {
+            if input_mouse.pressed(pan_button) {
+                let scaling = Vec2::new(
+                    window.width() / (projection.right - projection.left),
+                    window.height() / (projection.top - projection.bottom),
+                ) * projection.scale;
+
+                transform.translation -= (delta * scaling).extend(0.);
             }
         }
-
-        for ev in ev_scroll.iter() {
-            scroll += ev.y;
-        }
-    }
-
-    // assuming there is exacly one main camera entity, so this is ok.
-    if let Ok(mut transform) = q_camera.get_single_mut() {
-        if pan.length_squared() > 0.0 {
-            let scale = transform.scale.x;
-            transform.translation.x -= pan.x * scale / 4.0;
-            transform.translation.y += pan.y * scale / 4.0;
-        } else if scroll.abs() > 0.0 {
-            let scale = (transform.scale.x - scroll).clamp(1.0, 1_000_000_000.0);
-            transform.scale = Vec3::new(scale, scale, scale);
-        }
+        *last_pos = Some(current_pos);
     }
 }
 
