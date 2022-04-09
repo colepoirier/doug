@@ -1296,7 +1296,7 @@ dependencies = [
  "bevy_prototype_lyon",
  "derive_more",
  "futures-lite",
- "layout21raw",
+ "layout21",
  "lyon_algorithms",
  "lyon_geom",
  "rfd",
@@ -1565,6 +1565,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1927,6 +1928,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "layout21"
+version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
+dependencies = [
+ "gds21",
+ "layout21protos",
+ "layout21raw",
+ "layout21tetris",
+ "layout21utils",
+ "lef21",
+]
+
+[[package]]
 name = "layout21protos"
 version = "0.2.1"
 source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
@@ -1944,6 +1958,23 @@ dependencies = [
  "layout21protos",
  "layout21utils",
  "lef21",
+ "num-integer",
+ "num-traits",
+ "serde",
+ "serde_derive",
+ "slotmap",
+]
+
+[[package]]
+name = "layout21tetris"
+version = "0.2.1"
+source = "git+https://github.com/colepoirier/Layout21#88d76dda1019a97e8de616c12c00f4e4730b4509"
+dependencies = [
+ "derive_builder",
+ "derive_more",
+ "layout21protos",
+ "layout21raw",
+ "layout21utils",
  "num-integer",
  "num-traits",
  "serde",
