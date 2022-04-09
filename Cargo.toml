@@ -12,7 +12,7 @@ bevy_framepace = "0.3.0"
 bevy_egui = "0.12.1"
 lyon_algorithms = "0.17.7"
 lyon_geom = "0.17.6"
-layout21raw = { git = "https://github.com/colepoirier/Layout21" }
+layout21 = { git = "https://github.com/colepoirier/Layout21" }
 vlsir = "0.2.1"
 rfd = "0.8.1"
 futures-lite = "1.12.0"
