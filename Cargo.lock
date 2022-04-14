@@ -1300,6 +1300,7 @@ dependencies = [
  "lyon_algorithms",
  "lyon_geom",
  "rfd",
+ "sorted-vec",
  "vlsir",
 ]
 
@@ -2983,6 +2984,12 @@ name = "smawk"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f67ad224767faa3c7d8b6d91985b78e70a1324408abcb1cfcc2be4c06bc06043"
+
+[[package]]
+name = "sorted-vec"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da8edb37c24177a4d09d502f3755ef679986654742af1a50a6e4f9b68108d366"
 
 [[package]]
 name = "spin_sleep"

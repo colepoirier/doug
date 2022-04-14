@@ -10,27 +10,25 @@ use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path as LyonPath};
 use lyon_algorithms::hit_test::hit_test_path;
 use lyon_geom::Translation;
 
+use sorted_vec::SortedVec;
+
+use derive_more::{Deref, DerefMut};
+
 pub struct EditingPlugin;
 
 impl Plugin for EditingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(ShapePlugin)
-            .add_stage_after(CoreStage::Update, "detect_clicked", SystemStage::parallel())
-            .add_stage_after(
-                "detect_clicked",
-                "highlight_selected",
-                SystemStage::parallel(),
-            )
-            .add_stage_after(
-                "highlight_selected",
-                "unhighlight_selected",
-                SystemStage::parallel(),
-            )
-            .add_system_to_stage(CoreStage::Update, cursor_hover_system)
-            .add_system_to_stage(CoreStage::PostUpdate, highlight_hovered_system)
+            .insert_resource(ShapeStack::default())
+            .add_stage_after(CoreStage::Update, "set_hovered", SystemStage::parallel())
+            .add_stage_after("set_hovered", "detect_clicked", SystemStage::parallel())
+            .add_stage_after("detect_clicked", "highlight", SystemStage::parallel())
+            .add_system_to_stage(CoreStage::Update, cursor_hover_detect_system)
+            .add_system_to_stage("set_hovered", set_hovered_system)
             .add_system_to_stage("detect_clicked", select_clicked_system)
-            .add_system_to_stage("highlight_selected", highlight_selected_sytem)
-            .add_system_to_stage("unhighlight_selected", unhighlight_deselected_system)
+            .add_system_to_stage("highlight", highlight_hovered_system)
+            .add_system_to_stage("highlight", highlight_selected_sytem)
+            .add_system_to_stage("highlight", unhighlight_deselected_system)
             .add_system(print_hovered_info_system)
             .add_system(print_selected_info_system);
     }
@@ -46,15 +44,22 @@ pub struct Hovered;
 #[derive(Component)]
 pub struct Selected;
 
-/// Resource to calculate the shape the cursor interacted with by layer/z-order
-/// Layer 0 is furthest from the camera/screen, Layer 999 is closest to the camera
-#[derive(Copy, Clone, Debug, Default)]
-pub struct TopShape {
-    pub layer: u16,
-    pub shape: Option<Entity>,
+#[derive(Debug, Clone, Copy, Eq, Ord)]
+pub struct Shape {
+    pub layer: u8,
+    pub entity: Entity,
 }
 
-impl PartialEq for TopShape {
+impl Default for Shape {
+    fn default() -> Self {
+        Self {
+            layer: 0,
+            entity: Entity::from_raw(0),
+        }
+    }
+}
+
+impl PartialEq for Shape {
     fn eq(&self, other: &Self) -> bool {
         if self.layer == other.layer {
             true
@@ -64,22 +69,26 @@ impl PartialEq for TopShape {
     }
 }
 
-impl PartialOrd for TopShape {
+impl PartialOrd for Shape {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.layer.partial_cmp(&other.layer)
     }
 }
 
-pub fn cursor_hover_system(
-    mut commands: Commands,
+/// Resource to calculate the shape the cursor interacted with by layer/z-order
+/// Layer 0 is furthest from the camera/screen, Layer 999 is closest to the camera
+#[derive(Clone, Debug, Default, Deref, DerefMut)]
+pub struct ShapeStack(pub SortedVec<Shape>);
+
+pub fn cursor_hover_detect_system(
     cursor_pos: Res<CursorWorldPos>,
+    mut shape_stack: ResMut<ShapeStack>,
     rect_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Rect>>,
     poly_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Poly>>,
     path_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Path>>,
-    hovered_q: Query<Entity, With<Hovered>>,
 ) {
     if cursor_pos.is_changed() {
-        let mut top_shape = TopShape::default();
+        *shape_stack = ShapeStack::default();
 
         let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
 
@@ -90,13 +99,9 @@ pub fn cursor_hover_system(
                 transform.translation.x,
                 transform.translation.y,
             ));
-            let shape = TopShape {
-                layer,
-                shape: Some(entity),
-            };
 
-            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
-                top_shape = shape;
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
+                shape_stack.insert(Shape { layer, entity });
             }
         }
 
@@ -108,13 +113,8 @@ pub fn cursor_hover_system(
                 transform.translation.y,
             ));
 
-            let shape = TopShape {
-                layer,
-                shape: Some(entity),
-            };
-
-            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
-                top_shape = shape;
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
+                shape_stack.insert(Shape { layer, entity });
             }
         }
 
@@ -126,27 +126,29 @@ pub fn cursor_hover_system(
                 transform.translation.y,
             ));
 
-            let shape = TopShape {
-                layer,
-                shape: Some(entity),
-            };
-
-            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && shape > top_shape {
-                top_shape = shape;
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
+                shape_stack.insert(Shape { layer, entity });
             }
         }
+    }
+}
 
-        if let Some(e) = top_shape.shape {
-            for hovered in hovered_q.iter() {
-                if e != hovered {
-                    commands.entity(hovered).remove::<Hovered>();
-                }
-            }
-            commands.entity(e).insert(Hovered);
-        } else {
-            for hovered in hovered_q.iter() {
+pub fn set_hovered_system(
+    mut commands: Commands,
+    shape_stack: Res<ShapeStack>,
+    hovered_q: Query<Entity, With<Hovered>>,
+) {
+    info!("{shape_stack:?}");
+    if let Some(&Shape { entity, .. }) = shape_stack.iter().last() {
+        for hovered in hovered_q.iter() {
+            if entity != hovered {
                 commands.entity(hovered).remove::<Hovered>();
             }
+        }
+        commands.entity(entity).insert(Hovered);
+    } else {
+        for hovered in hovered_q.iter() {
+            commands.entity(hovered).remove::<Hovered>();
         }
     }
 }

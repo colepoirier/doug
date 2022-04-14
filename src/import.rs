@@ -72,7 +72,7 @@ pub struct Layer {
 }
 
 #[derive(Debug, Default, Clone, Deref, DerefMut)]
-pub struct Layers(HashMap<u16, Layer>);
+pub struct Layers(HashMap<u8, Layer>);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct VlsirCell {
@@ -168,21 +168,21 @@ pub struct LoadCellCompleteEvent;
 pub struct ImportRectEvent {
     pub rect: Rect,
     pub net: Net,
-    pub layer: u16,
+    pub layer: u8,
     pub color: Color,
 }
 
 pub struct ImportPolyEvent {
     pub poly: Poly,
     pub net: Net,
-    pub layer: u16,
+    pub layer: u8,
     pub color: Color,
 }
 
 pub struct ImportPathEvent {
     pub path: Path,
     pub net: Net,
-    pub layer: u16,
+    pub layer: u8,
     pub color: Color,
 }
 
@@ -262,7 +262,7 @@ pub fn import_lib_system(
             let lib_layers = &lib.layers.read().unwrap().slots;
 
             for raw::Layer { layernum, name, .. } in lib_layers.values() {
-                let num = *layernum as u16;
+                let num = *layernum as u8;
                 if let Some(_) = layers.insert(
                     num,
                     Layer {
@@ -551,7 +551,7 @@ pub fn import_cell_shapes(
         let layer = read_lib_layers
             .get(*layer)
             .expect("This Element's LayerKey does not exist in this Library's Layers")
-            .layernum as u16;
+            .layernum as u8;
 
         let color = layers
             .get(&layer)

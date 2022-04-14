@@ -5,7 +5,7 @@ pub mod ui;
 
 use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
-use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::render::camera::Camera;
 use bevy::{prelude::*, render::camera::ScalingMode};
 
@@ -41,7 +41,7 @@ pub struct ViewportDimensions {
 pub struct CursorWorldPos(pub IVec2);
 
 #[derive(Component, Debug, Clone, Deref, DerefMut)]
-pub struct InLayer(pub u16);
+pub struct InLayer(pub u8);
 
 impl Default for InLayer {
     fn default() -> Self {
@@ -52,7 +52,7 @@ impl Default for InLayer {
 #[derive(
     Component, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut,
 )]
-pub struct LayerNum(pub u16);
+pub struct LayerNum(pub u8);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct UpdateViewportEvent {
@@ -191,7 +191,7 @@ pub fn camera_pan_system(
     mut last_pos: Local<Option<Vec2>>,
 ) {
     // change input mapping for panning here.
-    let pan_button = MouseButton::Left;
+    let pan_button = MouseButton::Right;
 
     if !egui_ctx.ctx_mut().wants_pointer_input() {
         // code taken from the excellent bevy_pancam plugin
