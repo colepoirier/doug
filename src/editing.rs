@@ -29,6 +29,7 @@ impl Plugin for EditingPlugin {
             .add_system_to_stage("highlight", highlight_hovered_system)
             .add_system_to_stage("highlight", highlight_selected_sytem)
             .add_system_to_stage("highlight", unhighlight_deselected_system)
+            .add_system(cycle_shape_stack_hover_system)
             .add_system(print_hovered_info_system)
             .add_system(print_selected_info_system);
     }
@@ -77,8 +78,11 @@ impl PartialOrd for Shape {
 
 /// Resource to calculate the shape the cursor interacted with by layer/z-order
 /// Layer 0 is furthest from the camera/screen, Layer 999 is closest to the camera
-#[derive(Clone, Debug, Default, Deref, DerefMut)]
-pub struct ShapeStack(pub SortedVec<Shape>);
+#[derive(Clone, Debug, Default)]
+pub struct ShapeStack {
+    pub offset: isize,
+    pub stack: SortedVec<Shape>,
+}
 
 pub fn cursor_hover_detect_system(
     cursor_pos: Res<CursorWorldPos>,
@@ -101,7 +105,7 @@ pub fn cursor_hover_detect_system(
             ));
 
             if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
-                shape_stack.insert(Shape { layer, entity });
+                shape_stack.stack.insert(Shape { layer, entity });
             }
         }
 
@@ -114,7 +118,7 @@ pub fn cursor_hover_detect_system(
             ));
 
             if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
-                shape_stack.insert(Shape { layer, entity });
+                shape_stack.stack.insert(Shape { layer, entity });
             }
         }
 
@@ -127,19 +131,70 @@ pub fn cursor_hover_detect_system(
             ));
 
             if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
-                shape_stack.insert(Shape { layer, entity });
+                shape_stack.stack.insert(Shape { layer, entity });
             }
         }
     }
 }
+
+// pub fn set_hovered_system(
+//     mut commands: Commands,
+//     mut z_offset: Local<isize>,
+//     keyboard: Res<Input<KeyCode>>,
+//     shape_stack: Res<ShapeStack>,
+//     hovered_q: Query<Entity, With<Hovered>>,
+// ) {
+//     if !shape_stack.is_changed() {
+//         if keyboard.just_pressed(KeyCode::W) {
+//             *z_offset += 1;
+//         } else if keyboard.just_pressed(KeyCode::Q) {
+//             *z_offset -= 1;
+//         };
+
+//         if shape_stack.len() > 0 {
+//             let index = if *z_offset == 0 {
+//                 0
+//             } else {
+//                 (*z_offset % shape_stack.len() as isize) as usize
+//             };
+
+//             let e = shape_stack[index].entity;
+
+//             for hovered in hovered_q.iter() {
+//                 if e != hovered {
+//                     commands.entity(hovered).remove::<Hovered>();
+//                 }
+//             }
+//             commands.entity(e).insert(Hovered);
+//         } else {
+//             for hovered in hovered_q.iter() {
+//                 commands.entity(hovered).remove::<Hovered>();
+//             }
+//         }
+//     } else {
+//         *z_offset = 0;
+//     }
+// }
 
 pub fn set_hovered_system(
     mut commands: Commands,
     shape_stack: Res<ShapeStack>,
     hovered_q: Query<Entity, With<Hovered>>,
 ) {
-    info!("{shape_stack:?}");
-    if let Some(&Shape { entity, .. }) = shape_stack.iter().last() {
+    if shape_stack.stack.len() > 0 {
+        let offset = shape_stack.offset;
+        let stack = shape_stack.stack.iter().rev().collect::<Vec<&Shape>>();
+
+        let index = if offset < 0 {
+            (stack.len() as isize + offset) as usize % stack.len()
+        } else if offset > 0 {
+            offset as usize % stack.len()
+        } else {
+            0
+        };
+
+        let entity = stack[index].entity;
+
         for hovered in hovered_q.iter() {
             if entity != hovered {
                 commands.entity(hovered).remove::<Hovered>();
@@ -150,6 +205,17 @@ pub fn set_hovered_system(
         for hovered in hovered_q.iter() {
             commands.entity(hovered).remove::<Hovered>();
         }
+    }
+}
+
+pub fn cycle_shape_stack_hover_system(
+    mut shape_stack: ResMut<ShapeStack>,
+    keyboard: Res<Input<KeyCode>>,
+) {
+    if keyboard.just_pressed(KeyCode::W) {
+        shape_stack.offset += 1;
+    } else if keyboard.just_pressed(KeyCode::Q) {
+        shape_stack.offset -= 1;
     }
 }
 
@@ -276,9 +342,15 @@ pub fn unhighlight_deselected_system(
     }
 }
 
-pub fn print_hovered_info_system(query: Query<(Entity, &Net, &InLayer), Added<Hovered>>) {
+pub fn print_hovered_info_system(
+    query: Query<(Entity, &Net, &InLayer), Added<Hovered>>,
+    shape_stack: Res<ShapeStack>,
+) {
     for (e, net, layer) in query.iter() {
-        info!("Hovered: entity: {e:?}, net: {net:?}, layer: {layer:?}.");
+        info!(
+            "Hovered: entity: {e:?}, net: {net:?}, layer: {layer:?}, index: {}.",
+            shape_stack.offset
+        );
     }
 }
 
