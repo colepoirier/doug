@@ -1,4 +1,6 @@
+use crate::editing::ShapeStack;
 use crate::shapes::{Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeBundle};
+use crate::ui::LibInfoUIDropdownState;
 use crate::{InLayer, UpdateViewportEvent, ViewportDimensions, ALPHA, WIDTH};
 
 use std::collections::HashMap;
@@ -13,8 +15,6 @@ use bevy_prototype_lyon::prelude::{
 };
 
 use futures_lite::future;
-
-use derive_more::{Deref, DerefMut};
 
 use layout21::{
     raw::{
@@ -401,6 +401,8 @@ pub fn reset_state_on_new_lib_import(
     mut layer_colors: ResMut<LayerColors>,
     mut layers: ResMut<Layers>,
     mut vlsir_lib: ResMut<VlsirLib>,
+    mut shape_stack: ResMut<ShapeStack>,
+    mut ui_dropdown_state: ResMut<LibInfoUIDropdownState>,
     mut vlsir_open_lib_event_reader: EventReader<OpenVlsirLibEvent>,
 ) {
     for _ in vlsir_open_lib_event_reader.iter() {
@@ -409,6 +411,8 @@ pub fn reset_state_on_new_lib_import(
         *layer_colors = LayerColors::default();
         *layers = Layers::default();
         *vlsir_lib = VlsirLib::default();
+        *shape_stack = ShapeStack::default();
+        ui_dropdown_state.selected = 0;
 
         for e in query.iter() {
             commands.entity(e).despawn();
@@ -420,8 +424,10 @@ pub fn reset_state_on_new_cell_import(
     mut commands: Commands,
     query: Query<Entity, With<entity::Path>>,
     mut load_cell_event_reader: EventReader<LoadCellEvent>,
+    mut shape_stack: ResMut<ShapeStack>,
 ) {
     for _ in load_cell_event_reader.iter() {
+        *shape_stack = ShapeStack::default();
         for e in query.iter() {
             commands.entity(e).despawn();
         }

@@ -7,14 +7,18 @@ use rfd::FileDialog;
 
 pub struct UIPlugin;
 
+/// Token to ensure a system runs on the main thread.
+#[derive(Default)]
+pub struct NonSendMarker;
+
 #[derive(Debug, Default, Copy, Clone)]
 pub struct LibInfoUIDropdownState {
-    selected: usize,
+    pub selected: usize,
 }
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct LibInfoUILoadingState {
-    loading: bool,
+    pub loading: bool,
 }
 
 impl Plugin for UIPlugin {
@@ -22,6 +26,7 @@ impl Plugin for UIPlugin {
         app.add_plugin(EguiPlugin)
             .insert_resource(LibInfoUIDropdownState::default())
             .insert_resource(LibInfoUILoadingState::default())
+            .init_resource::<NonSendMarker>()
             .add_system(file_menu_system)
             // .add_system(debug_cursor_ui_or_world_system)
             .add_system(lib_info_cell_picker_system)
@@ -30,6 +35,11 @@ impl Plugin for UIPlugin {
 }
 
 pub fn file_menu_system(
+    // need this to make the system run on the main thread otherwise MacOS
+    // will have a race condition with the file dialog open request where
+    // sometimes the file dialog will not open and the app will go into
+    // 'Not Responding'/spinning beachball state
+    _marker: NonSend<NonSendMarker>,
     mut egui_ctx: ResMut<EguiContext>,
     mut open_vlsir_lib_event_writer: EventWriter<OpenVlsirLibEvent>,
 ) {
