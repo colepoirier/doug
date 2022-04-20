@@ -12,8 +12,6 @@ use lyon_geom::Translation;
 
 use sorted_vec::SortedVec;
 
-use derive_more::{Deref, DerefMut};
-
 pub struct EditingPlugin;
 
 impl Plugin for EditingPlugin {

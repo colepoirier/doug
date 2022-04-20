@@ -7,10 +7,9 @@ use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::render::camera::Camera;
-use bevy::{prelude::*, render::camera::ScalingMode};
+use bevy::{prelude::*, render::camera::ScalingMode, window::PresentMode,winit::WinitSettings};
 
 use bevy_egui::EguiContext;
-use derive_more::{Deref, DerefMut};
 
 use layout21::raw;
 
@@ -67,21 +66,20 @@ fn main() {
             title: "Doug CAD".to_string(),
             width: 1920.0,
             height: 1080.0,
-            vsync: true,
             ..Default::default()
         })
+        .insert_resource(WinitSettings::desktop_app())
+        // .insert_resource(WindowDescriptor {
+        //     present_mode: PresentMode::Mailbox,
+        //     ..Default::default()
+        // })
         .insert_resource(ViewportDimensions::default())
         .insert_resource(CursorWorldPos::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(Layout21ImportPlugin)
         .add_plugin(EditingPlugin)
         .add_plugin(UIPlugin)
-        // .add_plugin(FramepacePlugin {
-        //     enabled: true,
-        //     framerate_limit: FramerateLimit::Manual(30),
-        //     warn_on_frame_drop: true,
-        //     ..Default::default()
-        // })
+        // .add_plugin(FramepacePlugin::default())
         // .add_plugin(WorldInspectorPlugin::default())
         .add_stage("camera_change", SystemStage::parallel())
         .add_stage_after(
@@ -132,7 +130,7 @@ pub fn update_camera_viewport_system(
 
         let padding = 100.0;
 
-        let window = windows.get(cam.window).unwrap();
+        let window = windows.primary();
 
         let screen_width = window.width() - (2.0 * padding);
         let screen_height = window.height() - (2.0 * padding);
@@ -233,7 +231,7 @@ pub fn cursor_world_pos_system(
 ) {
     let (cam_t, cam) = camera_q.single();
 
-    let window = windows.get(cam.window).unwrap();
+    let window = windows.primary();
     let window_size = Vec2::new(window.width(), window.height());
 
     // Convert screen position [0..resolution] to ndc [-1..1]
