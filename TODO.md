@@ -1,6 +1,6 @@
 - use bevy_data size to cap max memory that can be used by a cell's bevy_protoype_lyon shapes
 - use cxx to create FFI safe bindings to tiledb
-- implement drag to select, hold option to multiselect
+- implement drag to select
 - implement hit shift to 'zoom in in z-index' by one layer so the top-most visible layer Visibility is set to false, left-ctrl to 'zoom out in z-index' to restore visibility to layers
 - add checkbox toggling of layer visibility in 'Libary Info' egui window
 - add ability to change layer colors? (should rethink Layer colors and coloring in general guided by 'Selecting Colors for Representing VLSI Layout by Giordano Bruno Beretta - Xerox Paulo Alto Research Center(1988)')
