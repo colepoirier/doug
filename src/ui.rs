@@ -1,5 +1,5 @@
 use crate::import::{
-    ImportLibCompleteEvent, LoadCellEvent, OpenVlsirLibEvent, VlsirCell, VlsirLib,
+    ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, OpenVlsirLibEvent, VlsirCell, VlsirLib,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
@@ -16,6 +16,11 @@ pub struct LibInfoUIDropdownState {
     pub selected: usize,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct LayersUIState {
+    pub layers: Vec<(bool, u8, String)>,
+}
+
 #[derive(Debug, Default, Copy, Clone)]
 pub struct LibInfoUILoadingState {
     pub loading: bool,
@@ -26,11 +31,13 @@ impl Plugin for UIPlugin {
         app.add_plugin(EguiPlugin)
             .insert_resource(LibInfoUIDropdownState::default())
             .insert_resource(LibInfoUILoadingState::default())
+            .insert_resource(LayersUIState::default())
             .init_resource::<NonSendMarker>()
             .add_system(file_menu_system)
             // .add_system(debug_cursor_ui_or_world_system)
             .add_system(lib_info_cell_picker_system)
-            .add_system(load_dropdown_selected_cell_system);
+            .add_system(load_dropdown_selected_cell_system)
+            .add_system(layer_visibility_widget_system);
     }
 }
 
@@ -162,6 +169,47 @@ pub fn load_dropdown_selected_cell_system(
     if state.is_changed() {
         info!("{state:?}");
         load_cell_event_writer.send(LoadCellEvent(state.selected));
+    }
+}
+
+pub fn layer_visibility_widget_system(
+    mut egui_ctx: ResMut<EguiContext>,
+    layers: Res<Layers>,
+    mut state: ResMut<LayersUIState>,
+) {
+    let mut temp = state.layers.clone();
+
+    if temp.is_empty() {
+        let mut layers = layers
+            .iter()
+            .map(|(num, Layer { name, color })| (*num, name.clone(), *color))
+            .collect::<Vec<(u8, Option<String>, Color)>>();
+
+        layers.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for layer in layers {
+            let label = if let Some(name) = layer.1 {
+                format!("({}) {}", layer.0, name)
+            } else {
+                format!("{}", layer.0)
+            };
+            temp.push((true, layer.0, label));
+        }
+    }
+
+    egui::Window::new("Layers")
+        .resizable(true)
+        .default_pos([5.0, 532.0])
+        .show(egui_ctx.ctx_mut(), |ui| {
+            for layer in temp.iter_mut() {
+                ui.vertical(|ui| {
+                    ui.add(egui::Checkbox::new(&mut layer.0, &layer.2));
+                });
+            }
+        });
+
+    if state.layers != temp {
+        state.layers = temp;
     }
 }
 

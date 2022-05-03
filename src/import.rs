@@ -1,6 +1,6 @@
 use crate::editing::ShapeStack;
 use crate::shapes::{Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeBundle};
-use crate::ui::LibInfoUIDropdownState;
+use crate::ui::{LayersUIState, LibInfoUIDropdownState};
 use crate::{InLayer, UpdateViewportEvent, ViewportDimensions, ALPHA, WIDTH};
 
 use std::collections::HashMap;
@@ -403,6 +403,7 @@ pub fn reset_state_on_new_lib_import(
     mut vlsir_lib: ResMut<VlsirLib>,
     mut shape_stack: ResMut<ShapeStack>,
     mut ui_dropdown_state: ResMut<LibInfoUIDropdownState>,
+    mut ui_layer_state: ResMut<LayersUIState>,
     mut vlsir_open_lib_event_reader: EventReader<OpenVlsirLibEvent>,
 ) {
     for _ in vlsir_open_lib_event_reader.iter() {
@@ -413,6 +414,7 @@ pub fn reset_state_on_new_lib_import(
         *vlsir_lib = VlsirLib::default();
         *shape_stack = ShapeStack::default();
         ui_dropdown_state.selected = 0;
+        ui_layer_state.layers = vec![];
 
         for e in query.iter() {
             commands.entity(e).despawn();
