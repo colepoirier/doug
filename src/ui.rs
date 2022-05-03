@@ -42,7 +42,8 @@ impl Plugin for UIPlugin {
             .add_system(lib_info_cell_picker_system)
             .add_system(load_dropdown_selected_cell_system)
             .add_system(layer_visibility_widget_system)
-            .add_system(set_layer_visibility_system);
+            .add_system(set_layer_visibility_system)
+            .add_system(layer_zindex_stepthru_system);
     }
 }
 
@@ -239,6 +240,21 @@ pub fn set_layer_visibility_system(
 
     if *prev != layer_state.layers {
         *prev = layer_state.layers.clone();
+    }
+}
+
+pub fn layer_zindex_stepthru_system(
+    mut layer_state: ResMut<LayersUIState>,
+    keyboard: Res<Input<KeyCode>>,
+) {
+    if keyboard.just_pressed(KeyCode::LShift) {
+        if let Some(elem) = layer_state.layers.iter_mut().rev().find(|(vis, _, _)| *vis) {
+            elem.0 = false;
+        }
+    } else if keyboard.just_pressed(KeyCode::LControl) {
+        if let Some(elem) = layer_state.layers.iter_mut().find(|(vis, _, _)| !vis) {
+            elem.0 = true;
+        }
     }
 }
 
