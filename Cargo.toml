@@ -22,7 +22,7 @@ version = "0.7.0"
 default-features = false
 features = ["bevy_winit", "render", "x11", "dynamic"]
 
-[profile.dev.package.layout21raw]
+[profile.dev.package.layout21]
 opt-level = 3
 
 [profile.dev.package."*"]
