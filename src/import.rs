@@ -189,7 +189,6 @@ pub struct ImportPathEvent {
 pub fn load_cell_complete_system(
     mut load_complete_event_reader: EventReader<LoadCellCompleteEvent>,
 ) {
-    for _ in load_complete_event_reader.iter() {}
 }
 
 pub fn spawn_vlsir_open_task_sytem(
@@ -448,7 +447,7 @@ pub fn load_cell_system(
     mut import_path_event_writer: EventWriter<ImportPathEvent>,
 ) {
     for &cell_idx in load_cell_event_reader.iter() {
-        if let Some(lib) = vlsir_lib.lib.as_ref() {
+        if let (Some(lib), Some(_)) = (vlsir_lib.lib.as_ref(), layers.iter().nth(0)) {
             let t = std::time::Instant::now();
 
             cell_info.index = Some(*cell_idx);
@@ -563,7 +562,7 @@ pub fn import_cell_shapes(
 
         let color = layers
             .get(&layer)
-            .expect("This Element's layer num does not exist in our Layers Resource")
+            .expect(&format!("This Element's layer num: {layer} does not exist in our Layers Resource: {layers:?}"))
             .color;
 
         match inner {
