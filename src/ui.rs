@@ -1,5 +1,9 @@
-use crate::import::{
-    ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, OpenVlsirLibEvent, VlsirCell, VlsirLib,
+use crate::{
+    import::{
+        ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, OpenVlsirLibEvent, VlsirCell,
+        VlsirLib,
+    },
+    InLayer,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
@@ -37,7 +41,8 @@ impl Plugin for UIPlugin {
             // .add_system(debug_cursor_ui_or_world_system)
             .add_system(lib_info_cell_picker_system)
             .add_system(load_dropdown_selected_cell_system)
-            .add_system(layer_visibility_widget_system);
+            .add_system(layer_visibility_widget_system)
+            .add_system(set_layer_visibility_system);
     }
 }
 
@@ -210,6 +215,30 @@ pub fn layer_visibility_widget_system(
 
     if state.layers != temp {
         state.layers = temp;
+    }
+}
+
+pub fn set_layer_visibility_system(
+    layer_state: Res<LayersUIState>,
+    mut prev: Local<Vec<(bool, u8, String)>>,
+    mut shape_q: Query<(&InLayer, &mut Visibility)>,
+) {
+    if prev.len() == 0 {
+        *prev = layer_state.layers.clone();
+    }
+
+    for ((curr_vis, layer, _), (prev_vis, _, _)) in layer_state.layers.iter().zip(prev.iter()) {
+        if curr_vis != prev_vis {
+            for (in_layer, mut vis) in shape_q.iter_mut() {
+                if **in_layer == *layer {
+                    vis.is_visible = *curr_vis;
+                }
+            }
+        }
+    }
+
+    if *prev != layer_state.layers {
+        *prev = layer_state.layers.clone();
     }
 }
 

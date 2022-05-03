@@ -85,16 +85,16 @@ pub struct ShapeStack {
 pub fn cursor_hover_detect_system(
     cursor_pos: Res<CursorWorldPos>,
     mut shape_stack: ResMut<ShapeStack>,
-    rect_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Rect>>,
-    poly_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Poly>>,
-    path_q: Query<(Entity, &LyonPath, &Transform, &InLayer), With<Path>>,
+    rect_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Rect>>,
+    poly_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Poly>>,
+    path_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Path>>,
 ) {
     if cursor_pos.is_changed() {
         *shape_stack = ShapeStack::default();
 
         let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
 
-        for (entity, path, transform, layer) in rect_q.iter() {
+        for (entity, path, transform, layer, vis) in rect_q.iter() {
             let layer = **layer;
 
             let path = path.0.clone().transformed(&Translation::new(
@@ -102,12 +102,12 @@ pub fn cursor_hover_detect_system(
                 transform.translation.y,
             ));
 
-            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && vis.is_visible {
                 shape_stack.stack.insert(Shape { layer, entity });
             }
         }
 
-        for (entity, path, transform, layer) in poly_q.iter() {
+        for (entity, path, transform, layer, vis) in poly_q.iter() {
             let layer = **layer;
 
             let path = path.0.clone().transformed(&Translation::new(
@@ -115,12 +115,12 @@ pub fn cursor_hover_detect_system(
                 transform.translation.y,
             ));
 
-            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && vis.is_visible {
                 shape_stack.stack.insert(Shape { layer, entity });
             }
         }
 
-        for (entity, path, transform, layer) in path_q.iter() {
+        for (entity, path, transform, layer, vis) in path_q.iter() {
             let layer = **layer;
 
             let path = path.0.clone().transformed(&Translation::new(
@@ -128,7 +128,7 @@ pub fn cursor_hover_detect_system(
                 transform.translation.y,
             ));
 
-            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) {
+            if hit_test_path(&point, path.iter(), FillRule::NonZero, 0.0) && vis.is_visible  {
                 shape_stack.stack.insert(Shape { layer, entity });
             }
         }
@@ -136,7 +136,7 @@ pub fn cursor_hover_detect_system(
 }
 
 // pub fn set_hovered_system(
-//     mut commands: Commands,
+//     mut commeands: Commands,
 //     mut z_offset: Local<isize>,
 //     keyboard: Res<Input<KeyCode>>,
 //     shape_stack: Res<ShapeStack>,
