@@ -135,44 +135,6 @@ pub fn cursor_hover_detect_system(
     }
 }
 
-// pub fn set_hovered_system(
-//     mut commeands: Commands,
-//     mut z_offset: Local<isize>,
-//     keyboard: Res<Input<KeyCode>>,
-//     shape_stack: Res<ShapeStack>,
-//     hovered_q: Query<Entity, With<Hovered>>,
-// ) {
-//     if !shape_stack.is_changed() {
-//         if keyboard.just_pressed(KeyCode::W) {
-//             *z_offset += 1;
-//         } else if keyboard.just_pressed(KeyCode::Q) {
-//             *z_offset -= 1;
-//         };
-
-//         if shape_stack.len() > 0 {
-//             let index = if *z_offset == 0 {
-//                 0
-//             } else {
-//                 (*z_offset % shape_stack.len() as isize) as usize
-//             };
-
-//             let e = shape_stack[index].entity;
-
-//             for hovered in hovered_q.iter() {
-//                 if e != hovered {
-//                     commands.entity(hovered).remove::<Hovered>();
-//                 }
-//             }
-//             commands.entity(e).insert(Hovered);
-//         } else {
-//             for hovered in hovered_q.iter() {
-//                 commands.entity(hovered).remove::<Hovered>();
-//             }
-//         }
-//     } else {
-//         *z_offset = 0;
-//     }
-// }
 
 pub fn set_hovered_system(
     mut commands: Commands,
