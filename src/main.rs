@@ -7,7 +7,7 @@ use bevy::ecs::archetype::Archetypes;
 use bevy::ecs::component::{ComponentId, Components};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::render::camera::Camera;
-use bevy::{prelude::*, render::camera::ScalingMode, window::PresentMode,winit::WinitSettings};
+use bevy::{prelude::*, render::camera::ScalingMode, window::PresentMode, winit::WinitSettings};
 
 use bevy_egui::EguiContext;
 
@@ -37,7 +37,7 @@ pub struct ViewportDimensions {
 }
 
 #[derive(Debug, Default, Clone, Copy, Deref, DerefMut)]
-pub struct CursorWorldPos(pub IVec2);
+pub struct CursorWorldPos(pub Vec2);
 
 #[derive(Component, Debug, Clone, Deref, DerefMut)]
 pub struct InLayer(pub u8);
@@ -242,8 +242,8 @@ pub fn cursor_world_pos_system(
         let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
         world_pos.truncate();
 
-        cursor_world_pos.x = world_pos.x.round() as i32;
-        cursor_world_pos.y = world_pos.y.round() as i32;
+        cursor_world_pos.x = world_pos.x;
+        cursor_world_pos.y = world_pos.y;
     }
 }
 

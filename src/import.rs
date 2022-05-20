@@ -368,7 +368,7 @@ pub fn import_lib_system(
             })
             .collect::<Vec<CellContentsInfo>>();
 
-        // let mut f = std::fs::File::create(format!("{}_cell_contents", lib.name)).unwrap();
+        // let mut f = std::fs::File::create(format!("{}_cell_contents.dbg", lib.name)).unwrap();
         // use std::io::Write;
         // f.write(format!("{dbg_cell_contents_info:#?}").as_bytes())
         //     .unwrap();
