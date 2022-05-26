@@ -18,10 +18,21 @@ impl Plugin for EditingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(ShapePlugin)
             .insert_resource(ShapeStack::default())
-            .add_stage_after(CoreStage::Update, "set_hovered", SystemStage::parallel())
+            .add_event::<Interaction>()
+            .add_stage_after(CoreStage::Update, "pointer_events", SystemStage::parallel())
+            .add_stage_after("pointer_events", "set_hovered", SystemStage::parallel())
             .add_stage_after("set_hovered", "detect_clicked", SystemStage::parallel())
             .add_stage_after("detect_clicked", "highlight", SystemStage::parallel())
             .add_system_to_stage(CoreStage::Update, cursor_hover_detect_system)
+            .add_system_set_to_stage(
+                "pointer_events",
+                SystemSet::new()
+                    .with_system(initialize_pointer_event_determination)
+                    .with_system(
+                        resolve_pointer_event_determination
+                            .after(initialize_pointer_event_determination),
+                    ),
+            )
             .add_system_to_stage("set_hovered", set_hovered_system)
             .add_system_to_stage("detect_clicked", select_clicked_system)
             .add_system_to_stage("highlight", highlight_hovered_system)
@@ -34,6 +45,70 @@ impl Plugin for EditingPlugin {
     }
 }
 
+#[derive(Debug, Deref)]
+pub struct PointerInitialPos(Vec2);
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum Interaction {
+    Click,
+    DragStart,
+    DragEnd,
+}
+
+pub fn initialize_pointer_event_determination(
+    mut commands: Commands,
+    windows: Res<Windows>,
+    input_mouse: Res<Input<MouseButton>>,
+) {
+    if input_mouse.just_pressed(MouseButton::Left) {
+        let window = windows.get_primary().unwrap();
+
+        if let Some(initial_pos) = window.cursor_position() {
+            commands.insert_resource(PointerInitialPos(initial_pos));
+        }
+    }
+}
+
+pub fn resolve_pointer_event_determination(
+    mut commands: Commands,
+    pointer_event_state: Option<Res<PointerInitialPos>>,
+    windows: Res<Windows>,
+    input_mouse: Res<Input<MouseButton>>,
+    mut interaction_ev: EventWriter<Interaction>,
+) {
+    if let Some(pointer_initial_pos) = pointer_event_state {
+        let window = windows.get_primary().unwrap();
+
+        let current_pos = match window.cursor_position() {
+            Some(pos) => {
+                if (0.0 <= pos.x && pos.x <= window.width())
+                    && (0.0 <= pos.y && pos.y <= window.height())
+                {
+                    pos
+                } else {
+                    return;
+                }
+            }
+            None => return,
+        };
+
+        let delta = current_pos - **pointer_initial_pos;
+
+        if delta.length() > 10.0 && !input_mouse.just_released(MouseButton::Left) {
+            interaction_ev.send(Interaction::DragStart);
+        }
+
+        if input_mouse.just_released(MouseButton::Left) {
+            if delta.length() < 10.0 {
+                interaction_ev.send(Interaction::Click);
+            } else {
+                interaction_ev.send(Interaction::DragEnd);
+            }
+            commands.remove_resource::<PointerInitialPos>();
+        }
+    }
+}
+
 /// Marker component to indicate that the mouse
 /// currently hovers over the given entity.
 #[derive(Component)]
@@ -43,6 +118,11 @@ pub struct Hovered;
 /// is currently selected entity.
 #[derive(Component)]
 pub struct Selected;
+
+/// Marker component to indicate that the given
+/// entity is being dragged.
+#[derive(Component)]
+pub struct Dragging;
 
 #[derive(Debug, Clone, Copy, Eq, Ord)]
 pub struct Shape {
@@ -89,10 +169,11 @@ pub fn cursor_hover_detect_system(
     rect_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Rect>>,
     poly_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Poly>>,
     path_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Path>>,
+    input_mouse: Res<Input<MouseButton>>,
 ) {
     // TODO: add delta so shape stack does not reset if mouse moves a tiny bit wile
     // changing the active shape in the shape stack
-    if cursor_pos.is_changed() {
+    if cursor_pos.is_changed() && !input_mouse.pressed(MouseButton::Left) {
         *shape_stack = ShapeStack::default();
 
         let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
@@ -142,7 +223,6 @@ pub fn set_hovered_system(
     mut commands: Commands,
     shape_stack: Res<ShapeStack>,
     hovered_q: Query<Entity, With<Hovered>>,
-    input_mouse: Res<Input<MouseButton>>,
 ) {
     if shape_stack.stack.len() > 0 {
         let offset = shape_stack.offset;
@@ -163,14 +243,10 @@ pub fn set_hovered_system(
                 commands.entity(hovered).remove::<Hovered>();
             }
         }
-        if !input_mouse.pressed(MouseButton::Left) {
-            commands.entity(entity).insert(Hovered);
-        }
+        commands.entity(entity).insert(Hovered);
     } else {
-        if !input_mouse.pressed(MouseButton::Left) {
-            for hovered in hovered_q.iter() {
-                commands.entity(hovered).remove::<Hovered>();
-            }
+        for hovered in hovered_q.iter() {
+            commands.entity(hovered).remove::<Hovered>();
         }
     }
 }
@@ -188,104 +264,71 @@ pub fn cycle_shape_stack_hover_system(
 
 /// Highlight a shape as Hovered by making it more opaque when the mouse hovers over it.
 pub fn highlight_hovered_system(
-    mut hovered_q: Query<&mut DrawMode, Added<Hovered>>,
-    mut shape_q: Query<&mut DrawMode, Without<Hovered>>,
+    mut hovered_q: Query<(Entity, &mut DrawMode), Added<Hovered>>,
+    mut shape_q: Query<(Entity, &mut DrawMode), Without<Hovered>>,
+    selected_q: Query<Entity, With<Selected>>,
     removed_hovered: RemovedComponents<Hovered>,
 ) {
-    for mut draw in hovered_q.iter_mut() {
+    'outer_1: for (hovered_e, mut draw) in hovered_q.iter_mut() {
         if let DrawMode::Outlined {
             ref mut fill_mode, ..
         } = *draw
         {
+            for selected_e in selected_q.iter() {
+                if selected_e == hovered_e {
+                    continue 'outer_1;
+                }
+            }
             fill_mode.color = *fill_mode.color.set_a(0.5);
         }
     }
 
-    for entity in removed_hovered.iter() {
-        if let Ok(mut draw) = shape_q.get_mut(entity) {
+    'outer_2: for entity in removed_hovered.iter() {
+        if let Ok((shape_e, mut draw)) = shape_q.get_mut(entity) {
             if let DrawMode::Outlined {
                 ref mut fill_mode, ..
             } = *draw
             {
+                for selected_e in selected_q.iter() {
+                    if selected_e == shape_e {
+                        continue 'outer_2;
+                    }
+                }
                 fill_mode.color = *fill_mode.color.set_a(ALPHA);
             }
         }
     }
 }
 
-pub enum CursorInteraction {
-    Click,
-    Drag,
-}
-
 pub fn select_clicked_system(
     mut commands: Commands,
     hovered_q: Query<Entity, With<Hovered>>,
     selected_q: Query<Entity, With<Selected>>,
-    selected_added_q: Query<Entity, Added<Selected>>,
+    dragging_q: Query<Entity, With<Dragging>>,
     keyboard: Res<Input<KeyCode>>,
-    windows: Res<Windows>,
-    mut last_pos: Local<Option<Vec2>>,
-    input_mouse: Res<Input<MouseButton>>,
+    mut interaction_ev: EventReader<Interaction>,
 ) {
-    let mut is_click = false;
+    use crate::editing::Interaction::*;
 
-    // record the postion of the cursor when the click started
-    if input_mouse.just_pressed(MouseButton::Left) {
-        let window = windows.get_primary().unwrap();
-
-        let current_pos = match window.cursor_position() {
-            Some(current_pos) => current_pos,
-            None => return,
-        };
-
-        // store the position in a local so we can compare the
-        // value of the mouse down positon to the value of the
-        // mouse up position when it happens on a subsequent frame
-        *last_pos = Some(current_pos);
-    }
-
-    // record the postion of the cursor when the click ended
-    if input_mouse.just_released(MouseButton::Left) {
-        let window = windows.get_primary().unwrap();
-
-        let current_pos = match window.cursor_position() {
-            Some(current_pos) => current_pos,
-            None => return,
-        };
-
-        // calculate how much the cursor moved if at all between mouse down
-        // and mouse up to distinguish click from click-and-drag
-        let delta = current_pos - last_pos.unwrap_or(current_pos);
-
-        // allow for very small movements on clicking which should be counted
-        // as clicks not click and drags. the tolerance value of 10.0 was found
-        // to be near optimal in manual testing
-        if delta.length() < 10.0 {
-            is_click = true;
-        }
-
-        if is_click {
-            info!("click!");
-        } else {
-            info!("drag!");
-        }
-
-        *last_pos = None;
-    }
-
-    if input_mouse.just_pressed(MouseButton::Left) {
+    for &ev in interaction_ev.iter() {
         if hovered_q.is_empty() {
             for selected in selected_q.iter() {
-                info!("Removing Selected from: {selected:?}");
+                info!("Nothing Hovered, removing Selected from: {selected:?}");
                 commands.entity(selected).remove::<Selected>();
+            }
+        }
+
+        if ev == DragEnd {
+            for dragging_e in dragging_q.iter() {
+                info!("Removing Dragging from: {dragging_e:?}");
+                commands.entity(dragging_e).remove::<Dragging>();
             }
         }
 
         for hovered in hovered_q.iter() {
             // logic if the user is holding the LAlt key
             if keyboard.pressed(KeyCode::LAlt) {
-                if is_click {
+                if ev == Click {
                     // if the hovered shape that was clicked is already selected, deselect it
                     if selected_q.get(hovered).is_ok() {
                         info!("Removing Selected from: {hovered:?}");
@@ -303,16 +346,36 @@ pub fn select_clicked_system(
             else {
                 // if there are multiple shapes currently selected (from a previous LAlt held state)
                 // deselect all except the the clicked shape
-                if !selected_q.is_empty() && selected_q.get_single().is_err() && is_click {
-                    info!("multiple shapes and click");
-                    // deselect all previously selected shapes before marking the
-                    // shape that was hovered when the click happened as selected
-                    for selected in selected_q.iter() {
-                        info!("multiple shapes were selected and one of them was clicked");
-                        // remove the Selected marker component from all shapes except for the clicked shape
-                        if hovered_q.get(selected).is_err() {
-                            info!("Removing Selected from: {selected:?}");
-                            commands.entity(selected).remove::<Selected>();
+                if !selected_q.is_empty() && selected_q.get_single().is_err() {
+                    if ev == Click {
+                        info!("multiple shapes and click");
+                        // deselect all previously selected shapes before marking the
+                        // shape that was hovered when the click happened as selected
+                        for selected in selected_q.iter() {
+                            info!("multiple shapes were selected and one of them was clicked");
+                            // remove the Selected marker component from all shapes except for the clicked shape
+                            if hovered_q.get(selected).is_err() {
+                                info!("Removing Selected from: {selected:?}");
+                                commands.entity(selected).remove::<Selected>();
+                            }
+                        }
+                    } else if ev == DragStart {
+                        if let Ok(_) = selected_q.get(hovered) {
+                            for selected in selected_q.iter() {
+                                info!("Inserting Dragging on: {selected:?}");
+                                commands.entity(selected).insert(Dragging);
+                            }
+                        } else {
+                            for selected in selected_q.iter() {
+                                commands.entity(selected).remove::<Selected>();
+                            }
+                            commands.entity(hovered).insert(Dragging);
+                            commands.entity(hovered).insert(Selected);
+                        }
+                    } else if ev == DragEnd {
+                        for dragging in dragging_q.iter() {
+                            info!("Removing Dragging on: {dragging:?}");
+                            commands.entity(dragging).remove::<Dragging>();
                         }
                     }
                 }
@@ -320,10 +383,17 @@ pub fn select_clicked_system(
                 else if selected_q.get_single().is_ok() {
                     info!("exactly one shape is selected");
                     // if the hovered shape that was clicked is already selected, deselect it
-                    if selected_q.get(hovered).is_ok() && is_click {
-                        info!("exactly one shape is selected and hovered, and click");
-                        info!("Removing Selected from: {hovered:?}");
-                        commands.entity(hovered).remove::<Selected>();
+                    if selected_q.get(hovered).is_ok() {
+                        if ev == Click {
+                            info!("exactly one shape is selected and hovered, and click");
+                            info!("Removing Selected from: {hovered:?}");
+                            commands.entity(hovered).remove::<Selected>();
+                        }
+                        if ev == DragStart {
+                            info!("exactly one shape is selected and hovered, and drag");
+                            info!("Removing Selected from: {hovered:?}");
+                            commands.entity(hovered).insert(Dragging);
+                        }
                     }
                     // if the shape that is hovered is not selected, then regardless of whether
                     // click/drag run this
@@ -337,24 +407,21 @@ pub fn select_clicked_system(
                         }
                         // mark the shape that was hovered when the click happened as selected
                         info!("Inserting Selected on: {hovered:?}");
+                        commands.entity(hovered).insert(Dragging);
                         commands.entity(hovered).insert(Selected);
                     }
-                } else if selected_q.get_single().is_err() {
-                    info!("no shaped is currently selected");
+                } else if selected_q.get_single().is_err() && ev == DragStart {
+                    info!("no shape is currently selected");
                     // mark the shape that was hovered when the click happened as selected
-                    info!("Inserting Selected on: {hovered:?}");
+                    info!("Inserting Dragging on: {hovered:?}");
+                    commands.entity(hovered).insert(Dragging);
+                    commands.entity(hovered).insert(Selected);
+                } else if selected_q.get_single().is_err() && ev == Click {
+                    info!("no shape is currently selected");
+                    // mark the shape that was hovered when the click happened as selected
+                    info!("Inserting Dragging on: {hovered:?}");
                     commands.entity(hovered).insert(Selected);
                 }
-            }
-        }
-    }
-
-    if is_click && !keyboard.pressed(KeyCode::LAlt) && selected_q.get_single().is_ok() {
-        info!("is_click, no_alt, single shape selected");
-        for hovered in hovered_q.iter() {
-            if selected_q.get(hovered).is_ok() && !selected_added_q.get(hovered).is_ok() {
-                info!("is_click Removing Selected from: {hovered:?}");
-                commands.entity(hovered).remove::<Selected>();
             }
         }
     }
@@ -413,20 +480,23 @@ pub fn print_selected_info_system(query: Query<(Entity, &Net, &InLayer), Added<S
 
 pub fn click_and_drag_shape_system(
     input_mouse: Res<Input<MouseButton>>,
-    mut hover_q: Query<&mut Transform, With<Selected>>,
+    mut dragging_q: Query<&mut Transform, With<Dragging>>,
     cursor_world_pos: Res<CursorWorldPos>,
     mut last_pos: Local<Option<Vec2>>,
 ) {
     if input_mouse.pressed(MouseButton::Left) {
-        if let Ok(mut transform) = hover_q.get_single_mut() {
-            let current_pos = **cursor_world_pos;
-            let delta = (current_pos - last_pos.unwrap_or(current_pos)).extend(0.0);
+        let current_pos = **cursor_world_pos;
+        let delta = (current_pos - last_pos.unwrap_or(current_pos)).extend(0.0);
 
-            transform.translation += delta;
-            *last_pos = Some(current_pos);
-        } else {
+        if dragging_q.is_empty() {
             *last_pos = None;
         }
+
+        for mut transform in dragging_q.iter_mut() {
+            transform.translation += delta;
+        }
+
+        *last_pos = Some(current_pos);
     } else {
         *last_pos = None;
     }
