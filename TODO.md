@@ -3,6 +3,9 @@
 - implement selected shapes 'corner and midpoints' to indicate where the shape can be clicked-and-dragged to edit from, add associated editing functionality
 - implement undo/redo functionality with file menu and keyboard shortcuts
 - implement file saving to gds and proto and possibly a custom fast loading file format using rkyv
+- implement a physical unit grid and snap-to functionality for editing
+- implement a window displaying information about the currently selected shape (net name, layer, entity id, dimensions, position)
+- think about if a window dipslaying information about multiple currently selected shapes makes sense and how that information would be displayed
 
 - add ability to change layer colors? (should rethink Layer colors and coloring in general guided by 'Selecting Colors for Representing VLSI Layout by Giordano Bruno Beretta - Xerox Paulo Alto Research Center(1988)')
 
