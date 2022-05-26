@@ -4,6 +4,7 @@
 - implement undo/redo functionality with file menu and keyboard shortcuts
 - implement file saving to gds and proto and possibly a custom fast loading file format using rkyv
 - implement a physical unit grid and snap-to functionality for editing
+- display current physical unit coordinates of the cursor either in an egui window or in the footer of the application window
 - implement a window displaying information about the currently selected shape (net name, layer, entity id, dimensions, position)
 - think about if a window dipslaying information about multiple currently selected shapes makes sense and how that information would be displayed
 
