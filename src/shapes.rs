@@ -3,7 +3,7 @@ use bevy::prelude::{Bundle, Component, Deref, DerefMut};
 use bevy_prototype_lyon::entity;
 use layout21::raw;
 
-#[derive(Component, Default, Bundle)]
+#[derive(Default, Bundle)]
 pub struct ShapeBundle {
     pub net: Net,
     pub layer: InLayer,
@@ -24,7 +24,7 @@ pub struct RectBundle {
 #[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
 pub struct Poly(pub raw::Polygon);
 
-#[derive(Component, Default, Bundle)]
+#[derive(Default, Bundle)]
 pub struct PolyBundle {
     pub poly: Poly,
     #[bundle]
@@ -34,7 +34,7 @@ pub struct PolyBundle {
 #[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
 pub struct Path(pub raw::Path);
 
-#[derive(Component, Default, Bundle)]
+#[derive(Default, Bundle)]
 pub struct PathBundle {
     pub path: Path,
     #[bundle]
