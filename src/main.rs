@@ -247,6 +247,23 @@ pub fn cursor_world_pos_system(
     }
 }
 
+pub fn screen_to_world_pos(
+    windows: &Windows,
+    camera_q: &Query<(&Transform, &Camera)>,
+    screen_pos: Vec2,
+) -> Vec2 {
+    let (cam_t, cam) = camera_q.single();
+
+    let window = windows.primary();
+    let window_size = Vec2::new(window.width(), window.height());
+
+    // Convert screen position [0..resolution] to ndc [-1..1]
+    let ndc_to_world = cam_t.compute_matrix() * cam.projection_matrix.inverse();
+    let ndc = (Vec2::new(screen_pos.x, screen_pos.y) / window_size) * 2.0 - Vec2::ONE;
+    let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+    world_pos.truncate()
+}
+
 pub fn get_component_names_for_entity(
     entity: Entity,
     archetypes: &Archetypes,

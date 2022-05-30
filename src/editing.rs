@@ -1,11 +1,15 @@
 use crate::{
     import::Net,
+    screen_to_world_pos,
     shapes::{Path, Poly, Rect},
     CursorWorldPos, InLayer, ALPHA,
 };
 use bevy::prelude::*;
 use bevy_prototype_lyon::plugin::ShapePlugin;
-use bevy_prototype_lyon::prelude::{DrawMode, FillRule, Path as LyonPath};
+use bevy_prototype_lyon::prelude::{
+    shapes as lyon_shapes, DrawMode, FillMode, FillOptions, FillRule, GeometryBuilder,
+    Path as LyonPath, StrokeMode, StrokeOptions,
+};
 
 use lyon_algorithms::hit_test::hit_test_path;
 use lyon_geom::Translation;
@@ -18,6 +22,7 @@ impl Plugin for EditingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(ShapePlugin)
             .insert_resource(ShapeStack::default())
+            .insert_resource(PointerInitialPos::default())
             .add_event::<Interaction>()
             .add_stage_after(CoreStage::Update, "pointer_events", SystemStage::parallel())
             .add_stage_after("pointer_events", "set_hovered", SystemStage::parallel())
@@ -38,6 +43,13 @@ impl Plugin for EditingPlugin {
             .add_system_to_stage("highlight", highlight_hovered_system)
             .add_system_to_stage("highlight", highlight_selected_sytem)
             .add_system_to_stage("highlight", unhighlight_deselected_system)
+            .add_system_set(
+                SystemSet::new()
+                    .with_system(spawn_despawn_selection_box_system)
+                    .with_system(
+                        draw_selection_box_system.before(spawn_despawn_selection_box_system),
+                    ),
+            )
             .add_system(cycle_shape_stack_hover_system)
             .add_system(print_hovered_info_system)
             .add_system(click_and_drag_shape_system)
@@ -45,8 +57,8 @@ impl Plugin for EditingPlugin {
     }
 }
 
-#[derive(Debug, Deref)]
-pub struct PointerInitialPos(Vec2);
+#[derive(Debug, Default, Deref)]
+pub struct PointerInitialPos(Option<Vec2>);
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Interaction {
@@ -56,27 +68,27 @@ pub enum Interaction {
 }
 
 pub fn initialize_pointer_event_determination(
-    mut commands: Commands,
     windows: Res<Windows>,
+    mut pointer_initial_pos: ResMut<PointerInitialPos>,
     input_mouse: Res<Input<MouseButton>>,
 ) {
     if input_mouse.just_pressed(MouseButton::Left) {
         let window = windows.get_primary().unwrap();
 
         if let Some(initial_pos) = window.cursor_position() {
-            commands.insert_resource(PointerInitialPos(initial_pos));
+            *pointer_initial_pos = PointerInitialPos(Some(initial_pos));
         }
     }
 }
 
 pub fn resolve_pointer_event_determination(
-    mut commands: Commands,
-    pointer_event_state: Option<Res<PointerInitialPos>>,
+    mut pointer_initial_pos: ResMut<PointerInitialPos>,
     windows: Res<Windows>,
     input_mouse: Res<Input<MouseButton>>,
     mut interaction_ev: EventWriter<Interaction>,
+    mut drag_started: Local<bool>,
 ) {
-    if let Some(pointer_initial_pos) = pointer_event_state {
+    if let Some(initial_pos) = **pointer_initial_pos {
         let window = windows.get_primary().unwrap();
 
         let current_pos = match window.cursor_position() {
@@ -92,19 +104,24 @@ pub fn resolve_pointer_event_determination(
             None => return,
         };
 
-        let delta = current_pos - **pointer_initial_pos;
+        let delta = current_pos - initial_pos;
 
-        if delta.length() > 10.0 && !input_mouse.just_released(MouseButton::Left) {
+        if delta.length_squared() > 10.0
+            && !input_mouse.just_released(MouseButton::Left)
+            && !*drag_started
+        {
             interaction_ev.send(Interaction::DragStart);
+            *drag_started = true;
         }
 
         if input_mouse.just_released(MouseButton::Left) {
-            if delta.length() < 10.0 {
+            if delta.length_squared() < 10.0 {
                 interaction_ev.send(Interaction::Click);
             } else {
                 interaction_ev.send(Interaction::DragEnd);
+                *drag_started = false;
             }
-            commands.remove_resource::<PointerInitialPos>();
+            *pointer_initial_pos = PointerInitialPos(None);
         }
     }
 }
@@ -424,6 +441,102 @@ pub fn select_clicked_system(
                 }
             }
         }
+    }
+}
+
+#[derive(Component)]
+pub struct SelectionBox;
+
+fn spawn_despawn_selection_box_system(
+    mut commands: Commands,
+    keyboard: Res<Input<KeyCode>>,
+    mut interaction_ev: EventReader<Interaction>,
+    selection_box_q: Query<Entity, With<SelectionBox>>,
+) {
+    use crate::editing::Interaction::*;
+
+    for &ev in interaction_ev.iter() {
+        match ev {
+            DragStart => {
+                if keyboard.pressed(KeyCode::LAlt) {
+                    info!("Spawn SelectionBox");
+                    commands.spawn().insert(SelectionBox);
+                }
+            }
+            DragEnd => {
+                if let Ok(e) = selection_box_q.get_single() {
+                    commands.entity(e).despawn();
+                    info!("Despawn SelectionBox");
+                    // now, send an event with the lyon shape to the selection system
+                }
+            }
+            _ => continue,
+        }
+    }
+}
+
+pub fn draw_selection_box_system(
+    mut commands: Commands,
+    windows: Res<Windows>,
+    camera_q: Query<(&Transform, &Camera)>,
+    pointer_initial_pos: Res<PointerInitialPos>,
+    cursor_world_pos: Res<CursorWorldPos>,
+    mut initial_world_pos: Local<Vec2>,
+    new_selection_box_q: Query<Entity, Added<SelectionBox>>,
+    selection_box_q: Query<Entity, (With<SelectionBox>, With<LyonPath>)>,
+) {
+    if let Ok(e) = new_selection_box_q.get_single() {
+        let lyon_rect = lyon_shapes::Rectangle {
+            origin: lyon_shapes::RectangleOrigin::BottomLeft,
+            extents: (0.0, 0.0).into(),
+        };
+
+        *initial_world_pos = screen_to_world_pos(&windows, &camera_q, pointer_initial_pos.unwrap());
+        let transform =
+            Transform::from_translation(Vec3::new(initial_world_pos.x, initial_world_pos.y, 800.0));
+
+        let selection_box = GeometryBuilder::build_as(
+            &lyon_rect,
+            DrawMode::Outlined {
+                fill_mode: FillMode {
+                    color: Color::rgba(1.0, 1.0, 1.0, 0.0),
+                    options: FillOptions::default(),
+                },
+                outline_mode: StrokeMode {
+                    options: StrokeOptions::default().with_line_width(3.0),
+                    color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                },
+            },
+            transform,
+        );
+        commands.entity(e).insert_bundle(selection_box);
+    }
+
+    if let Ok(e) = selection_box_q.get_single() {
+        let delta = **cursor_world_pos - *initial_world_pos;
+
+        let lyon_rect = lyon_shapes::Rectangle {
+            origin: lyon_shapes::RectangleOrigin::BottomLeft,
+            extents: (delta.x, delta.y).into(),
+        };
+
+        let transform = Transform::from_translation(Vec3::new(initial_world_pos.x, initial_world_pos.y, 800.0));
+
+        let selection_box = GeometryBuilder::build_as(
+            &lyon_rect,
+            DrawMode::Outlined {
+                fill_mode: FillMode {
+                    color: Color::rgba(1.0, 1.0, 1.0, 0.0),
+                    options: FillOptions::default(),
+                },
+                outline_mode: StrokeMode {
+                    options: StrokeOptions::default().with_line_width(3.0),
+                    color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                },
+            },
+            transform,
+        );
+        commands.entity(e).insert_bundle(selection_box);
     }
 }
 
