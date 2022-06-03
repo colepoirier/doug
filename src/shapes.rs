@@ -1,6 +1,7 @@
 use crate::{import::Net, InLayer};
 use bevy::prelude::{Bundle, Component, Deref, DerefMut};
 use bevy_prototype_lyon::entity;
+use geo;
 use layout21::raw;
 
 #[derive(Default, Bundle)]
@@ -11,20 +12,24 @@ pub struct ShapeBundle {
     pub shape_lyon: entity::ShapeBundle,
 }
 
-#[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
-pub struct Rect(pub raw::Rect);
+pub type GeoRect = geo::Rect<i32>;
 
-#[derive(Default, Bundle)]
+#[derive(Component, Clone, Debug, Deref, DerefMut)]
+pub struct Rect(pub GeoRect);
+
+#[derive(Bundle)]
 pub struct RectBundle {
     pub rect: Rect,
     #[bundle]
     pub shape: ShapeBundle,
 }
 
-#[derive(Component, Clone, Default, Debug, Deref, DerefMut)]
-pub struct Poly(pub raw::Polygon);
+pub type GeoPolygon = geo::Polygon<i32>;
 
-#[derive(Default, Bundle)]
+#[derive(Component, Clone, Debug, Deref, DerefMut)]
+pub struct Poly(pub GeoPolygon);
+
+#[derive(Bundle)]
 pub struct PolyBundle {
     pub poly: Poly,
     #[bundle]

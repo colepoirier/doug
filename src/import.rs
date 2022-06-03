@@ -1,5 +1,7 @@
 use crate::editing::ShapeStack;
-use crate::shapes::{Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeBundle};
+use crate::shapes::{
+    GeoPolygon, GeoRect, Path, PathBundle, Poly, PolyBundle, Rect, RectBundle, ShapeBundle,
+};
 use crate::ui::{LayersUIState, LibInfoUIDropdownState};
 use crate::{InLayer, UpdateViewportEvent, ViewportDimensions, ALPHA, WIDTH};
 
@@ -571,7 +573,10 @@ pub fn import_cell_shapes(
                 let p0 = p0.shift(offset);
                 let p1 = p1.shift(offset);
 
-                let rect = raw::Rect { p0, p1 };
+                let p0 = (p0.x as i32, p0.y as i32);
+                let p1 = (p1.x as i32, p1.y as i32);
+
+                let rect = GeoRect::new(p0, p1);
                 import_rect_event_writer.send(ImportRectEvent {
                     rect: Rect(rect),
                     net,
@@ -580,10 +585,18 @@ pub fn import_cell_shapes(
                 });
             }
             Shape::Polygon(p) => {
-                let mut p = p.clone();
-                p.points = p.points.iter().map(|p| p.shift(offset)).collect();
+                let poly = GeoPolygon::new(
+                    p.points
+                        .iter()
+                        .map(|p| {
+                            let p = p.shift(offset);
+                            (p.x as i32, p.y as i32)
+                        })
+                        .collect(),
+                    vec![],
+                );
                 import_poly_event_writer.send(ImportPolyEvent {
-                    poly: Poly(p.clone()),
+                    poly: Poly(poly),
                     net,
                     layer,
                     color,
@@ -639,17 +652,15 @@ pub fn import_rect_system(
         color,
     } in import_rect_event_reader.iter()
     {
-        let (width, height) = (*rect).bbox().size();
+        let x_min = rect.min().x;
+        let y_min = rect.min().y;
 
-        let raw::Rect {
-            p0: bottom_left, ..
-        } = **rect;
-
-        let Point { x: x_min, y: y_min } = bottom_left;
+        let x_max = rect.max().x;
+        let y_max = rect.max().y;
 
         let lyon_rect = lyon_shapes::Rectangle {
             origin: lyon_shapes::RectangleOrigin::BottomLeft,
-            extents: (width as f32, height as f32).into(),
+            extents: (rect.width() as f32, rect.height() as f32).into(),
         };
 
         let transform =
@@ -695,10 +706,10 @@ pub fn import_poly_system(
     } in import_poly_event_reader.iter()
     {
         let lyon_poly = lyon_shapes::Polygon {
-            points: (*poly)
-                .points
-                .iter()
-                .map(|Point { x, y }| Vec2::new(*x as f32, *y as f32))
+            points: poly
+                .exterior()
+                .coords()
+                .map(|c| Vec2::new(c.x as f32, c.y as f32))
                 .collect::<Vec<Vec2>>(),
             closed: true,
         };

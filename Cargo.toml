@@ -16,6 +16,7 @@ vlsir = "0.2.1"
 rfd = "0.8.1"
 futures-lite = "1.12.0"
 sorted-vec = "0.8.0"
+geo = "0.20.1"
 
 [dependencies.bevy]
 version = "0.7.0"
