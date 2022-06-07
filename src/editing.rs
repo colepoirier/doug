@@ -328,6 +328,7 @@ pub fn select_clicked_system(
     use crate::editing::Interaction::*;
 
     for &ev in interaction_ev.iter() {
+        info!("EVENT: {ev:?}");
         if hovered_q.is_empty() {
             for selected in selected_q.iter() {
                 info!("Nothing Hovered, removing Selected from: {selected:?}");
@@ -337,7 +338,7 @@ pub fn select_clicked_system(
 
         if ev == DragEnd {
             for dragging_e in dragging_q.iter() {
-                info!("Removing Dragging from: {dragging_e:?}");
+                info!("Drag end: removing Dragging from: {dragging_e:?}");
                 commands.entity(dragging_e).remove::<Dragging>();
             }
         }
@@ -348,13 +349,13 @@ pub fn select_clicked_system(
                 if ev == Click {
                     // if the hovered shape that was clicked is already selected, deselect it
                     if selected_q.get(hovered).is_ok() {
-                        info!("Removing Selected from: {hovered:?}");
+                        info!("LAlt held and Hovered shape already selected, and clicked, Removing Selected from: {hovered:?}");
                         commands.entity(hovered).remove::<Selected>();
                     }
                     // if the hoverered shape that was clicked is not already selected, select it
                     else {
                         // mark the shape that was hovered when the click happened as selected
-                        info!("Inserting Selected on: {hovered:?}");
+                        info!("LAlt held and Hovered shape clicked, Inserting Selected on: {hovered:?}");
                         commands.entity(hovered).insert(Selected);
                     }
                 }
@@ -369,29 +370,35 @@ pub fn select_clicked_system(
                         // deselect all previously selected shapes before marking the
                         // shape that was hovered when the click happened as selected
                         for selected in selected_q.iter() {
-                            info!("multiple shapes were selected and one of them was clicked");
+                            info!("    multiple shapes were selected and one of them was clicked");
                             // remove the Selected marker component from all shapes except for the clicked shape
                             if hovered_q.get(selected).is_err() {
-                                info!("Removing Selected from: {selected:?}");
+                                info!("        Removing Selected from: {selected:?}");
                                 commands.entity(selected).remove::<Selected>();
                             }
                         }
                     } else if ev == DragStart {
+                        info!("multiple shapes and drag");
                         if let Ok(_) = selected_q.get(hovered) {
+                            info!("    one of the shapes that was selected was the shape that was hovered when the drag started");
                             for selected in selected_q.iter() {
-                                info!("Inserting Dragging on: {selected:?}");
+                                info!("        Inserting Dragging on: {selected:?}");
                                 commands.entity(selected).insert(Dragging);
                             }
                         } else {
+                            info!("    a shape that was not selected was hovered when the drag started");
                             for selected in selected_q.iter() {
+                                info!("        Removing Selected on: {selected:?}");
                                 commands.entity(selected).remove::<Selected>();
                             }
+                            info!("    Inserting Dragging on: {hovered:?}");
                             commands.entity(hovered).insert(Dragging);
+                            info!("    Inserting Selected on: {hovered:?}");
                             commands.entity(hovered).insert(Selected);
                         }
                     } else if ev == DragEnd {
                         for dragging in dragging_q.iter() {
-                            info!("Removing Dragging on: {dragging:?}");
+                            info!("    Removing Dragging on: {dragging:?}");
                             commands.entity(dragging).remove::<Dragging>();
                         }
                     }
@@ -399,44 +406,48 @@ pub fn select_clicked_system(
                 // if there is exactly one shape currently selected when the click/drag happened
                 else if selected_q.get_single().is_ok() {
                     info!("exactly one shape is selected");
-                    // if the hovered shape that was clicked is already selected, deselect it
                     if selected_q.get(hovered).is_ok() {
+                    // if the hovered shape that was clicked is already selected, deselect it
                         if ev == Click {
-                            info!("exactly one shape is selected and hovered, and click");
-                            info!("Removing Selected from: {hovered:?}");
+                            info!("    exactly one shape is selected and hovered, and click");
+                            info!("    Removing Selected from: {hovered:?}");
                             commands.entity(hovered).remove::<Selected>();
                         }
                         if ev == DragStart {
-                            info!("exactly one shape is selected and hovered, and drag");
-                            info!("Removing Selected from: {hovered:?}");
+                            info!("    exactly one shape is selected and was teh shape hovered when drag start");
+                            info!("    Inserting Dragging on: {hovered:?}");
                             commands.entity(hovered).insert(Dragging);
                         }
                     }
                     // if the shape that is hovered is not selected, then regardless of whether
                     // click/drag run this
                     else if selected_q.get(hovered).is_err() {
-                        info!("selected shape is not hovered");
+                        info!("    selected shape is not hovered");
                         // deselect all previously selected shapes before marking the
                         // shape that was hovered when the click happened as selected
                         for selected in selected_q.iter() {
-                            info!("Removing Selected from: {selected:?}");
+                            info!("        Removing Selected from: {selected:?}");
                             commands.entity(selected).remove::<Selected>();
                         }
+                        if ev == DragStart {
+                            info!("    Inserting Dragging on: {hovered:?}");
+                            commands.entity(hovered).insert(Dragging);
+                        }
                         // mark the shape that was hovered when the click happened as selected
-                        info!("Inserting Selected on: {hovered:?}");
-                        commands.entity(hovered).insert(Dragging);
+                        info!("    Inserting Selected on: {hovered:?}");
                         commands.entity(hovered).insert(Selected);
                     }
                 } else if selected_q.get_single().is_err() && ev == DragStart {
                     info!("no shape is currently selected");
                     // mark the shape that was hovered when the click happened as selected
-                    info!("Inserting Dragging on: {hovered:?}");
+                    info!("    Inserting Dragging on: {hovered:?}");
                     commands.entity(hovered).insert(Dragging);
+                    info!("    Inserting Selected on: {hovered:?}");
                     commands.entity(hovered).insert(Selected);
                 } else if selected_q.get_single().is_err() && ev == Click {
                     info!("no shape is currently selected");
                     // mark the shape that was hovered when the click happened as selected
-                    info!("Inserting Dragging on: {hovered:?}");
+                    info!("    Inserting Dragging on: {hovered:?}");
                     commands.entity(hovered).insert(Selected);
                 }
             }
