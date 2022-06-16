@@ -4,7 +4,9 @@
 - implement undo/redo functionality with file menu and keyboard shortcuts
 - implement a physical unit grid and snap-to functionality for editing
 - implement file saving to gds and proto and possibly a custom fast loading file format using rkyv
-- implement selected shapes 'corner and midpoints' to indicate where the shape can be clicked-and-dragged to edit from, add associated editing functionality
+- implement selected shapes 'corner and midpoints' to indicate where the shape can be clicked-and-dragged to edit from, add associated editing functionality.
+- Add ability to delete shapes (needs to be tracked in undo/redo)
+- Add functionality to draw new shapes (rects should be easy, paths and polygons will require a lot more thought)
 
 - add ability to change layer colors? (should rethink Layer colors and coloring in general guided by 'Selecting Colors for Representing VLSI Layout by Giordano Bruno Beretta - Xerox Paulo Alto Research Center(1988)')
 
