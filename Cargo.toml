@@ -21,6 +21,11 @@ geo = "0.20.1"
 [dependencies.bevy]
 version = "0.7.0"
 default-features = false
+features = ["bevy_winit", "render"]
+
+[target.'cfg(unix)'.dependencies.bevy]
+version = "0.7.0"
+default-features = false
 features = ["bevy_winit", "render", "x11", "dynamic"]
 
 [profile.dev.package.layout21]
