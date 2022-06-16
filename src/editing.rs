@@ -118,10 +118,22 @@ pub fn resolve_pointer_event_determination(
                 {
                     pos
                 } else {
+                    if input_mouse.just_released(MouseButton::Left) {
+                        interaction_ev.send(Interaction::DragEnd);
+                        *drag_started = false;
+                        *pointer_initial_pos = PointerInitialPos(None);
+                    }
                     return;
                 }
             }
-            None => return,
+            None => {
+                if input_mouse.just_released(MouseButton::Left) {
+                    interaction_ev.send(Interaction::DragEnd);
+                    *drag_started = false;
+                    *pointer_initial_pos = PointerInitialPos(None);
+                }
+                return;
+            }
         };
 
         let delta = current_pos - initial_pos;
@@ -431,7 +443,7 @@ pub fn select_clicked_system(
                 else if selected_q.get_single().is_ok() {
                     info!("exactly one shape is selected");
                     if selected_q.get(hovered).is_ok() {
-                    // if the hovered shape that was clicked is already selected, deselect it
+                        // if the hovered shape that was clicked is already selected, deselect it
                         if ev == Click {
                             info!("    exactly one shape is selected and hovered, and click");
                             info!("    Removing Selected from: {hovered:?}");
