@@ -1,16 +1,21 @@
 use crate::{
+    get_component_names_for_entity,
     import::Net,
     screen_to_world_pos,
-    shapes::{Path, Poly, Rect},
+    shapes::{GeoRect, Path, Poly, Rect},
     CursorWorldPos, InLayer, ALPHA,
 };
-use bevy::prelude::*;
+use bevy::{
+    ecs::{archetype::Archetypes, component::Components},
+    prelude::*,
+};
 use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_prototype_lyon::prelude::{
     shapes as lyon_shapes, DrawMode, FillMode, FillOptions, FillRule, GeometryBuilder,
     Path as LyonPath, StrokeMode, StrokeOptions,
 };
 
+use geo::{coord, intersects::Intersects, translate::Translate};
 use lyon_algorithms::hit_test::hit_test_path;
 use lyon_geom::Translation;
 
@@ -27,7 +32,8 @@ impl Plugin for EditingPlugin {
             .add_stage_after(CoreStage::Update, "pointer_events", SystemStage::parallel())
             .add_stage_after("pointer_events", "set_hovered", SystemStage::parallel())
             .add_stage_after("set_hovered", "detect_clicked", SystemStage::parallel())
-            .add_stage_after("detect_clicked", "highlight", SystemStage::parallel())
+            .add_stage_after("detect_clicked", "click_and_drag", SystemStage::parallel())
+            .add_stage_after("click_and_drag", "highlight", SystemStage::parallel())
             .add_system_to_stage(CoreStage::Update, cursor_hover_detect_system)
             .add_system_set_to_stage(
                 "pointer_events",
@@ -52,8 +58,22 @@ impl Plugin for EditingPlugin {
             )
             .add_system(cycle_shape_stack_hover_system)
             .add_system(print_hovered_info_system)
-            .add_system(click_and_drag_shape_system)
-            .add_system(print_selected_info_system);
+            .add_system(print_selected_info_system)
+            // .add_system(debug_selection_box_components)
+            .add_system_to_stage("click_and_drag", click_and_drag_shape_system)
+            .add_system_to_stage("click_and_drag", selection_box_selection_system);
+    }
+}
+
+fn debug_selection_box_components(
+    selection_box_q: Query<Entity, With<SelectionBox>>,
+    world: &World,
+) {
+    if let Ok(entity) = selection_box_q.get_single() {
+        info!(
+            "SelectionBox components: {:?}",
+            get_component_names_for_entity(entity, &world.archetypes(), &world.components())
+        );
     }
 }
 
@@ -187,10 +207,14 @@ pub fn cursor_hover_detect_system(
     poly_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Poly>>,
     path_q: Query<(Entity, &LyonPath, &Transform, &InLayer, &Visibility), With<Path>>,
     input_mouse: Res<Input<MouseButton>>,
+    selection_box_q: Query<Entity, With<SelectionBox>>,
 ) {
-    // TODO: add delta so shape stack does not reset if mouse moves a tiny bit wile
+    // TODO: add delta so shape stack does not reset if mouse moves a tiny bit while
     // changing the active shape in the shape stack
-    if cursor_pos.is_changed() && !input_mouse.pressed(MouseButton::Left) {
+    if cursor_pos.is_changed()
+        && !input_mouse.pressed(MouseButton::Left)
+        && selection_box_q.get_single().is_err()
+    {
         *shape_stack = ShapeStack::default();
 
         let point = lyon_geom::point(cursor_pos.x as f32, cursor_pos.y as f32);
@@ -458,11 +482,22 @@ pub fn select_clicked_system(
 #[derive(Component)]
 pub struct SelectionBox;
 
+#[derive(Component, Deref, DerefMut, Debug)]
+pub struct DeltaWidthHeight(pub IVec2);
+
+#[derive(Bundle)]
+pub struct SelectionBoxBundle {
+    pub rect: Rect,
+    pub delta_rect: DeltaWidthHeight,
+    marker: SelectionBox,
+}
+
 fn spawn_despawn_selection_box_system(
     mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
     mut interaction_ev: EventReader<Interaction>,
     selection_box_q: Query<Entity, With<SelectionBox>>,
+    selected_q: Query<Entity, With<Selected>>,
 ) {
     use crate::editing::Interaction::*;
 
@@ -472,6 +507,10 @@ fn spawn_despawn_selection_box_system(
                 if keyboard.pressed(KeyCode::LAlt) {
                     info!("Spawn SelectionBox");
                     commands.spawn().insert(SelectionBox);
+                    // Remove selected from all currently selected entities when a SelectionBox starts
+                    for selected_e in selected_q.iter() {
+                        commands.entity(selected_e).remove::<Selected>();
+                    }
                 }
             }
             DragEnd => {
@@ -494,8 +533,22 @@ pub fn draw_selection_box_system(
     cursor_world_pos: Res<CursorWorldPos>,
     mut initial_world_pos: Local<Vec2>,
     new_selection_box_q: Query<Entity, Added<SelectionBox>>,
-    selection_box_q: Query<Entity, (With<SelectionBox>, With<LyonPath>)>,
+    mut selection_box_q: Query<
+        (Entity, &mut Rect, &mut DeltaWidthHeight),
+        (With<SelectionBox>, With<LyonPath>),
+    >,
 ) {
+    let draw_mode = DrawMode::Outlined {
+        fill_mode: FillMode {
+            options: FillOptions::default(),
+            color: Color::rgba(1.0, 1.0, 1.0, 0.25),
+        },
+        outline_mode: StrokeMode {
+            options: StrokeOptions::default().with_line_width(3.0),
+            color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+        },
+    };
+
     if let Ok(e) = new_selection_box_q.get_single() {
         let lyon_rect = lyon_shapes::Rectangle {
             origin: lyon_shapes::RectangleOrigin::BottomLeft,
@@ -506,48 +559,94 @@ pub fn draw_selection_box_system(
         let transform =
             Transform::from_translation(Vec3::new(initial_world_pos.x, initial_world_pos.y, 800.0));
 
-        let selection_box = GeometryBuilder::build_as(
-            &lyon_rect,
-            DrawMode::Outlined {
-                fill_mode: FillMode {
-                    color: Color::rgba(1.0, 1.0, 1.0, 0.0),
-                    options: FillOptions::default(),
-                },
-                outline_mode: StrokeMode {
-                    options: StrokeOptions::default().with_line_width(3.0),
-                    color: Color::rgba(1.0, 1.0, 1.0, 1.0),
-                },
-            },
-            transform,
-        );
-        commands.entity(e).insert_bundle(selection_box);
+        let selection_box = GeometryBuilder::build_as(&lyon_rect, draw_mode, transform);
+        commands
+            .entity(e)
+            .insert_bundle(selection_box)
+            .insert(Rect(GeoRect::new(
+                (initial_world_pos.x as i32, initial_world_pos.y as i32),
+                (initial_world_pos.x as i32, initial_world_pos.y as i32),
+            )))
+            .insert(DeltaWidthHeight((0, 0).into()));
     }
 
-    if let Ok(e) = selection_box_q.get_single() {
+    if let Ok((sb_e, mut rect, mut delta_wh)) = selection_box_q.get_single_mut() {
         let delta = **cursor_world_pos - *initial_world_pos;
+        let new_rect = Rect(GeoRect::new(
+            (cursor_world_pos.x as i32, cursor_world_pos.y as i32),
+            (initial_world_pos.x as i32, initial_world_pos.y as i32),
+        ));
+        delta_wh.x = new_rect.width() - rect.width();
+        delta_wh.y = new_rect.height() - rect.height();
+        *rect = new_rect;
 
         let lyon_rect = lyon_shapes::Rectangle {
             origin: lyon_shapes::RectangleOrigin::BottomLeft,
             extents: (delta.x, delta.y).into(),
         };
 
-        let transform = Transform::from_translation(Vec3::new(initial_world_pos.x, initial_world_pos.y, 800.0));
+        let transform =
+            Transform::from_translation(Vec3::new(initial_world_pos.x, initial_world_pos.y, 800.0));
 
-        let selection_box = GeometryBuilder::build_as(
-            &lyon_rect,
-            DrawMode::Outlined {
-                fill_mode: FillMode {
-                    color: Color::rgba(1.0, 1.0, 1.0, 0.0),
-                    options: FillOptions::default(),
-                },
-                outline_mode: StrokeMode {
-                    options: StrokeOptions::default().with_line_width(3.0),
-                    color: Color::rgba(1.0, 1.0, 1.0, 1.0),
-                },
-            },
-            transform,
-        );
-        commands.entity(e).insert_bundle(selection_box);
+        let selection_box = GeometryBuilder::build_as(&lyon_rect, draw_mode, transform);
+        commands.entity(sb_e).insert_bundle(selection_box);
+    }
+}
+
+pub fn selection_box_selection_system(
+    mut commands: Commands,
+    sb_q: Query<(&Rect, &DeltaWidthHeight), (With<SelectionBox>, Changed<Rect>)>,
+    rect_q: Query<(Entity, &Rect, &Transform), (Without<Selected>, Without<SelectionBox>)>,
+    poly_q: Query<(Entity, &Poly, &Transform), Without<Selected>>,
+    path_q: Query<(Entity, &Path, &Transform), Without<Selected>>,
+    selected_rect_q: Query<(Entity, &Rect, &Transform), With<Selected>>,
+    selected_poly_q: Query<(Entity, &Poly, &Transform), With<Selected>>,
+    selected_path_q: Query<(Entity, &Path, &Transform), With<Selected>>,
+) {
+    for (selection_r, delta_wh) in sb_q.iter() {
+        if delta_wh.x < 0 || delta_wh.y < 0 {
+            // do deselection
+            for (e, r, t) in selected_rect_q.iter() {
+                if !selection_r
+                    .intersects(&r.translate(t.translation.x as i32, t.translation.y as i32))
+                {
+                    commands.entity(e).remove::<Selected>();
+                }
+            }
+
+            for (e, p, t) in selected_poly_q.iter() {
+                if !selection_r
+                    .intersects(&p.translate(t.translation.x as i32, t.translation.y as i32))
+                {
+                    commands.entity(e).remove::<Selected>();
+                }
+            }
+        } else {
+            // do selection
+            for (e, r, t) in rect_q.iter() {
+                let transformed_coords =
+                    r.translate(t.translation.x as i32, t.translation.y as i32);
+                // info!(
+                //     "selection_r: {selection_r:?}, rect: {r:?}, translation: ({}, {}), transformed: {transformed_coords:?}",
+                //     t.translation.x,
+                //     t.translation.y
+                // );
+                if selection_r.intersects(&transformed_coords) {
+                    info!("Inserting Selected on {e:?}!");
+                    commands.entity(e).insert(Selected);
+                }
+            }
+
+            for (e, p, t) in poly_q.iter() {
+                // info!("selection_r: {selection_r:?}, poly: {p:?}");
+                if selection_r
+                    .intersects(&p.translate(t.translation.x as i32, t.translation.y as i32))
+                {
+                    commands.entity(e).insert(Selected);
+                }
+            }
+        }
+        // info!("SelectionBox: {selection_r:?}!");
     }
 }
 

@@ -652,22 +652,26 @@ pub fn import_rect_system(
         color,
     } in import_rect_event_reader.iter()
     {
-        let x_min = rect.min().x;
-        let y_min = rect.min().y;
+        let x_min = rect.min().x as f32;
+        let y_min = rect.min().y as f32;
 
-        let x_max = rect.max().x;
-        let y_max = rect.max().y;
+        let x_max = rect.max().x as f32;
+        let y_max = rect.max().y as f32;
 
-        let lyon_rect = lyon_shapes::Rectangle {
-            origin: lyon_shapes::RectangleOrigin::BottomLeft,
-            extents: (rect.width() as f32, rect.height() as f32).into(),
+        let lyon_poly = lyon_shapes::Polygon {
+            points: vec![
+                (x_min, y_min).into(),
+                (x_max, y_min).into(),
+                (x_max, y_max).into(),
+                (x_min, y_max).into(),
+            ],
+            closed: true,
         };
 
-        let transform =
-            Transform::from_translation(Vec3::new(x_min as f32, y_min as f32, *layer as f32));
+        let transform = Transform::from_translation(Vec3::new(0.0, 0.0, *layer as f32));
 
         let shape_lyon = GeometryBuilder::build_as(
-            &lyon_rect,
+            &lyon_poly,
             DrawMode::Outlined {
                 fill_mode: FillMode {
                     color: *color.clone().set_a(ALPHA),
