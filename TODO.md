@@ -1,5 +1,3 @@
-- implement click-and-drag rectangular area selection of shapes
-- implement click on shape and drag to move (may be tricky to get the UX on this right)
 - implement selected shapes 'corner and midpoints' to indicate where the shape can be clicked-and-dragged to edit from, add associated editing functionality
 - implement undo/redo functionality with file menu and keyboard shortcuts
 - implement file saving to gds and proto and possibly a custom fast loading file format using rkyv
