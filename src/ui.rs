@@ -3,7 +3,7 @@ use crate::{
         ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, OpenVlsirLibEvent, VlsirCell,
         VlsirLib,
     },
-    InLayer,
+    CursorWorldPos, InLayer,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
@@ -43,7 +43,8 @@ impl Plugin for UIPlugin {
             .add_system(load_dropdown_selected_cell_system)
             .add_system(layer_visibility_widget_system)
             .add_system(set_layer_visibility_system)
-            .add_system(layer_zindex_stepthru_system);
+            .add_system(layer_zindex_stepthru_system)
+            .add_system(display_cursor_pos_system);
     }
 }
 
@@ -256,6 +257,21 @@ pub fn layer_zindex_stepthru_system(
             elem.0 = true;
         }
     }
+}
+
+pub fn display_cursor_pos_system(
+    mut egui_ctx: ResMut<EguiContext>,
+    cursor_world_pos: Res<CursorWorldPos>,
+) {
+    egui::Window::new("Cursor World Position")
+        .resizable(false)
+        .default_pos([5.0, 142.0])
+        .show(egui_ctx.ctx_mut(), |ui| {
+            ui.label(format!(
+                "x: {} nm, y: {} nm",
+                cursor_world_pos.x as i32, cursor_world_pos.y as i32
+            ))
+        });
 }
 
 // figure out if cursor is hovering over UI or over bevy 'app world'
