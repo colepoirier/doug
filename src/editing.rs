@@ -9,6 +9,7 @@ use bevy::{
     ecs::{archetype::Archetypes, component::Components},
     prelude::*,
 };
+use bevy_egui::EguiContext;
 use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_prototype_lyon::prelude::{
     shapes as lyon_shapes, DrawMode, FillMode, FillOptions, FillRule, GeometryBuilder,
@@ -91,8 +92,9 @@ pub fn initialize_pointer_event_determination(
     windows: Res<Windows>,
     mut pointer_initial_pos: ResMut<PointerInitialPos>,
     input_mouse: Res<Input<MouseButton>>,
+    mut egui_ctx: ResMut<EguiContext>,
 ) {
-    if input_mouse.just_pressed(MouseButton::Left) {
+    if input_mouse.just_pressed(MouseButton::Left) && !egui_ctx.ctx_mut().wants_pointer_input() {
         let window = windows.get_primary().unwrap();
 
         if let Some(initial_pos) = window.cursor_position() {
