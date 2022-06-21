@@ -148,7 +148,7 @@ impl Plugin for Layout21ImportPlugin {
 }
 
 #[derive(Component, Debug, Default, Clone, PartialEq, PartialOrd, Deref, DerefMut)]
-pub struct Net(Option<String>);
+pub struct Net(pub Option<String>);
 
 #[derive(Debug, Default, Clone)]
 pub struct OpenVlsirLibEvent {
