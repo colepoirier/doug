@@ -1,5 +1,5 @@
-- implement a window displaying information about the currently selected shape (net name, layer, entity id, dimensions, position)
-- think about if a window dipslaying information about multiple currently selected shapes makes sense and how that information would be displayed
+- think about how adding dimensions and position info to 'currently selected shapes' window would make the most sense (just the bouding box for non-rects?)
+- think about how deselection/reselection, and 'indicate' clicked on selected shape entry in 'currently selected shapes' window list should work
 - implement undo/redo functionality with file menu and keyboard shortcuts
 - implement a physical unit grid and snap-to functionality for editing
 - implement file saving to gds and proto and possibly a custom fast loading file format using rkyv
