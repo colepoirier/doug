@@ -1,6 +1,7 @@
 use crate::{
+    editing::Selected,
     import::{
-        ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, OpenVlsirLibEvent, VlsirCell,
+        ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, Net, OpenVlsirLibEvent, VlsirCell,
         VlsirLib,
     },
     CursorWorldPos, InLayer,
@@ -44,7 +45,8 @@ impl Plugin for UIPlugin {
             .add_system(layer_visibility_widget_system)
             .add_system(set_layer_visibility_system)
             .add_system(layer_zindex_stepthru_system)
-            .add_system(display_cursor_pos_system);
+            .add_system(display_cursor_pos_system)
+            .add_system(display_current_selection_info);
     }
 }
 
@@ -271,6 +273,55 @@ pub fn display_cursor_pos_system(
                 "x: {} nm, y: {} nm",
                 cursor_world_pos.x as i32, cursor_world_pos.y as i32
             ))
+        });
+}
+
+pub fn display_current_selection_info(
+    mut egui_ctx: ResMut<EguiContext>,
+    selected_q: Query<(Entity, &InLayer, &Net), With<Selected>>,
+) {
+    // egui::Window::new("Layers")
+    //     .resizable(true)
+    //     .default_pos([5.0, 532.0])
+    //     .show(egui_ctx.ctx_mut(), |ui| {
+    //         for layer in temp.iter_mut() {
+    //             ui.vertical(|ui| {
+    //                 ui.add(egui::Checkbox::new(&mut layer.0, &layer.2));
+    //             });
+    //         }
+    //     });
+    egui::Window::new("Currently Selected Shapes")
+        .resizable(true)
+        .default_pos([5.0, 220.0])
+        .show(egui_ctx.ctx_mut(), |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                if selected_q.is_empty() {
+                    ui.label(format!("No shape is currently selected"));
+                } else {
+                    //     let mut layers = layers
+                    //     .iter()
+                    //     .map(|(num, Layer { name, color })| (*num, name.clone(), *color))
+                    //     .collect::<Vec<(u8, Option<String>, Color)>>();
+
+                    // layers.sort_by(|a, b| a.0.cmp(&b.0));
+                    let mut selected = selected_q.iter().collect::<Vec<(Entity, &InLayer, &Net)>>();
+                    selected.sort_by(|a, b| match a.1.cmp(b.1) {
+                        std::cmp::Ordering::Equal => a.0.cmp(&b.0),
+                        other => other,
+                    });
+                    selected
+                        .iter()
+                        .for_each(|(entity, InLayer(layer), Net(net))| {
+                            if let Some(net) = net {
+                                ui.label(format!(
+                                    "Layer: {layer:?}, Entity: {entity:?}, Net: {net:?}",
+                                ));
+                            } else {
+                                ui.label(format!("Layer: {layer:?}, Entity: {entity:?}"));
+                            }
+                        });
+                }
+            })
         });
 }
 
