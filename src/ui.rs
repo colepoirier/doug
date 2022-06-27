@@ -4,10 +4,13 @@ use crate::{
         ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, Net, OpenVlsirLibEvent, VlsirCell,
         VlsirLib,
     },
+    shapes::{Path, Poly, Rect},
     CursorWorldPos, InLayer,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
+use geo::prelude::BoundingRect;
+use layout21::raw::BoundBoxTrait;
 use rfd::FileDialog;
 
 pub struct UIPlugin;
@@ -279,6 +282,9 @@ pub fn display_cursor_pos_system(
 pub fn display_current_selection_info(
     mut egui_ctx: ResMut<EguiContext>,
     selected_q: Query<(Entity, &InLayer, &Net), With<Selected>>,
+    rect_q: Query<&Rect>,
+    poly_q: Query<&Poly>,
+    path_q: Query<&Path>,
 ) {
     // egui::Window::new("Layers")
     //     .resizable(true)
@@ -312,12 +318,45 @@ pub fn display_current_selection_info(
                     selected
                         .iter()
                         .for_each(|(entity, InLayer(layer), Net(net))| {
+                            let mut x_min = 0;
+                            let mut y_min = 0;
+                            let mut x_max = 0;
+                            let mut y_max = 0;
+
+                            let mut shape = "";
+
+                            if let Ok(s) = rect_q.get(*entity) {
+                                let min = s.bounding_rect().min();
+                                let max = s.bounding_rect().max();
+                                x_min = min.x;
+                                y_min = min.y;
+                                x_max = max.x;
+                                y_max = max.y;
+                                shape = "Rect";
+                            } else if let Ok(s) = poly_q.get(*entity) {
+                                let min = s.bounding_rect().unwrap().min();
+                                let max = s.bounding_rect().unwrap().max();
+                                x_min = min.x;
+                                y_min = min.y;
+                                x_max = max.x;
+                                y_max = max.y;
+                                shape = "Poly";
+                            } else if let Ok(s) = path_q.get(*entity) {
+                                let min = s.points.bbox().p0;
+                                let max = s.points.bbox().p1;
+                                x_min = min.x as i32;
+                                y_min = min.y as i32;
+                                x_max = max.x as i32;
+                                y_max = max.y as i32;
+                                shape = "Path"
+                            }
+
                             if let Some(net) = net {
                                 ui.label(format!(
-                                    "Layer: {layer:?}, Entity: {entity:?}, Net: {net:?}",
+                                    "Layer: {layer:?}, Entity: {entity:?}, Net: {net:?}, {shape}, Bbox: min[{x_min}, {y_min}], max[{x_max}, {y_max}]",
                                 ));
                             } else {
-                                ui.label(format!("Layer: {layer:?}, Entity: {entity:?}"));
+                                ui.label(format!("Layer: {layer:?}, Entity: {entity:?}, {shape}, Bbox: min[{x_min}, {y_min}], max[{x_max}, {y_max}]"));
                             }
                         });
                 }
