@@ -20,8 +20,8 @@ use futures_lite::future;
 
 use layout21::{
     raw::{
-        self, proto::ProtoImporter, Abstract, BoundBox, BoundBoxTrait, Cell, Element, Instance,
-        Layout, Library, Point, Shape,
+        self, proto::proto, proto::ProtoImporter, Abstract, BoundBox, BoundBoxTrait, Cell, Element,
+        Instance, Layout, Library, Point, Shape,
     },
     utils::Ptr,
 };
@@ -207,7 +207,7 @@ pub fn spawn_vlsir_open_task_sytem(
         let task: Task<Library> = thread_pool.spawn(async move {
             // enable to test UI Lib Info "Library:" loading spinner animation
             // std::thread::sleep(std::time::Duration::from_secs(5));
-            let plib: vlsir::Library = vlsir::open(path).unwrap();
+            let plib: proto::Library = proto::open(path).unwrap();
             ProtoImporter::import(&plib, None).unwrap()
         });
         commands.spawn().insert(task);
