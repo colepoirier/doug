@@ -2,6 +2,7 @@
 - think about how deselection/reselection, and 'indicate' clicked on selected shape entry in 'currently selected shapes' window list should work
 - implement undo/redo functionality with file menu and keyboard shortcuts
 - implement a physical unit grid and snap-to functionality for editing
+- snap-to for drawing paths between two pins
 - implement file saving to gds and proto and possibly a custom fast loading file format using rkyv
 - implement selected shapes 'corner and midpoints' to indicate where the shape can be clicked-and-dragged to edit from, add associated editing functionality.
 - Add ability to delete shapes (needs to be tracked in undo/redo)
