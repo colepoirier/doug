@@ -213,11 +213,11 @@ pub fn layer_visibility_widget_system(
         .resizable(true)
         .default_pos([5.0, 532.0])
         .show(egui_ctx.ctx_mut(), |ui| {
-            for layer in temp.iter_mut() {
-                ui.vertical(|ui| {
+            ui.vertical(|ui| {
+                for layer in temp.iter_mut() {
                     ui.add(egui::Checkbox::new(&mut layer.0, &layer.2));
-                });
-            }
+                }
+            });
         });
 
     if state.layers != temp {
