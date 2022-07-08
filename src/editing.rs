@@ -28,14 +28,34 @@ impl Plugin for EditingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(ShapePlugin)
             .insert_resource(ShapeStack::default())
+            .insert_resource(UndoRedoHistory::default())
             .insert_resource(PointerInitialPos::default())
             .add_event::<Interaction>()
+            .add_event::<UndoRedoEvent>()
+            .add_event::<PreDragPosEvent>()
             .add_stage_after(CoreStage::Update, "pointer_events", SystemStage::parallel())
             .add_stage_after("pointer_events", "set_hovered", SystemStage::parallel())
             .add_stage_after("set_hovered", "detect_clicked", SystemStage::parallel())
-            .add_stage_after("detect_clicked", "click_and_drag", SystemStage::parallel())
+            .add_stage_after(
+                "detect_clicked",
+                "transform_at_drag_start",
+                SystemStage::parallel(),
+            )
+            .add_stage_after(
+                "transform_at_drag_start",
+                "click_and_drag",
+                SystemStage::parallel(),
+            )
             .add_stage_after("click_and_drag", "highlight", SystemStage::parallel())
+            .add_stage_after("click_and_drag", "undo_redo_track", SystemStage::parallel())
+            .add_stage_after(
+                "undo_redo_track",
+                "undo_redo_debug",
+                SystemStage::parallel(),
+            )
             .add_system_to_stage(CoreStage::Update, cursor_hover_detect_system)
+            .add_system_to_stage("transform_at_drag_start", dragged_shape_initial_pos_system)
+            .add_system_to_stage("undo_redo_track", undo_redo_tracking_system)
             .add_system_set_to_stage(
                 "pointer_events",
                 SystemSet::new()
@@ -60,6 +80,9 @@ impl Plugin for EditingPlugin {
             .add_system(cycle_shape_stack_hover_system)
             .add_system(print_hovered_info_system)
             .add_system(print_selected_info_system)
+            .add_system(undo_redo_key_combo_system)
+            .add_system(undo_redo_system)
+            .add_system_to_stage("undo_redo_debug", debug_undo_redo_system)
             // .add_system(debug_selection_box_components)
             .add_system_to_stage("click_and_drag", click_and_drag_shape_system)
             .add_system_to_stage("click_and_drag", selection_box_selection_system);
@@ -715,6 +738,22 @@ pub fn print_selected_info_system(query: Query<(Entity, &Net, &InLayer), Added<S
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PreDragPosEvent {
+    pub entity: Entity,
+    pub pos: Vec2,
+}
+
+fn dragged_shape_initial_pos_system(
+    transform_q: Query<(Entity, &Transform), Added<Dragging>>,
+    mut pre_drag_pos_ev: EventWriter<PreDragPosEvent>,
+) {
+    if let Some((entity, t)) = transform_q.iter().nth(0) {
+        let pos = t.translation.truncate();
+        pre_drag_pos_ev.send(PreDragPosEvent { entity, pos });
+    }
+}
+
 pub fn click_and_drag_shape_system(
     input_mouse: Res<Input<MouseButton>>,
     mut dragging_q: Query<&mut Transform, With<Dragging>>,
@@ -736,6 +775,129 @@ pub fn click_and_drag_shape_system(
         *last_pos = Some(current_pos);
     } else {
         *last_pos = None;
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct UndoRedoHistory {
+    pub offset: usize,
+    pub actions: Vec<AtomicAction>,
+}
+
+#[derive(Debug, Default)]
+pub struct AtomicAction {
+    pub action: TranslateAction,
+    pub entities: Vec<Entity>,
+}
+
+#[derive(Deref, DerefMut, Debug, Default)]
+pub struct TranslateAction(pub Vec2);
+
+pub fn undo_redo_tracking_system(
+    mut history: ResMut<UndoRedoHistory>,
+    dragging_q: Query<Entity, With<Dragging>>,
+    transform_q: Query<&Transform, Without<Dragging>>,
+    mut interaction_ev: EventReader<Interaction>,
+    mut pre_drag_pos_ev: EventReader<PreDragPosEvent>,
+    mut initial_shape_pos: Local<(Vec<Entity>, Vec2)>,
+    mut dragging_entities: Local<Vec<Entity>>,
+) {
+    for ev in pre_drag_pos_ev.iter() {
+        *initial_shape_pos = (vec![ev.entity], ev.pos);
+    }
+    for interaction in interaction_ev.iter() {
+        match interaction {
+            Interaction::DragStart => {
+                *dragging_entities = dragging_q.iter().collect::<Vec<Entity>>();
+            }
+            Interaction::DragEnd => {
+                if !dragging_entities.is_empty() {
+                    let entity = initial_shape_pos.0[0];
+                    let pos = initial_shape_pos.1;
+                    let new_t = transform_q.get(entity).unwrap();
+                    let dt = new_t.translation.truncate() - pos;
+                    history.actions.push(AtomicAction {
+                        action: TranslateAction(dt),
+                        entities: (*dragging_entities).clone(),
+                    });
+                    history.offset += 1;
+                    *dragging_entities = vec![];
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
+pub fn debug_undo_redo_system(history: Res<UndoRedoHistory>) {
+    if history.is_changed() {
+        info!("{history:?}");
+    }
+}
+
+pub enum UndoRedoEvent {
+    Undo,
+    Redo,
+}
+
+pub fn undo_redo_key_combo_system(
+    keyboard: Res<Input<KeyCode>>,
+    mut undo_redo_ev: EventWriter<UndoRedoEvent>,
+) {
+    if keyboard.pressed(KeyCode::LControl) && keyboard.just_pressed(KeyCode::Z) {
+        if keyboard.pressed(KeyCode::LShift) {
+            info!("shift-ctrl-z!");
+            undo_redo_ev.send(UndoRedoEvent::Redo);
+        } else {
+            info!("ctrl-z!");
+            undo_redo_ev.send(UndoRedoEvent::Undo);
+        }
+    }
+}
+
+impl UndoRedoHistory {
+    fn undo_action(&mut self, transform_q: &mut Query<&mut Transform>) {
+        let AtomicAction { action, entities } = &self.actions[self.offset - 1];
+        for e in entities {
+            if let Ok(mut t) = transform_q.get_mut(*e) {
+                t.translation -= (*action).extend(0.0);
+            }
+        }
+        self.offset -= 1;
+    }
+
+    fn redo_action(&mut self, transform_q: &mut Query<&mut Transform>) {
+        let AtomicAction { action, entities } = &self.actions[self.offset];
+        for e in entities {
+            if let Ok(mut t) = transform_q.get_mut(*e) {
+                t.translation += (*action).extend(0.0);
+            }
+        }
+        self.offset += 1;
+    }
+}
+
+pub fn undo_redo_system(
+    mut undo_redo_ev: EventReader<UndoRedoEvent>,
+    mut undo_redo_history: ResMut<UndoRedoHistory>,
+    mut transform_q: Query<&mut Transform>,
+) {
+    for ev in undo_redo_ev.iter() {
+        use UndoRedoEvent::*;
+        match ev {
+            Undo => {
+                if undo_redo_history.offset > 0 && undo_redo_history.actions.len() > 0 {
+                    undo_redo_history.undo_action(&mut transform_q);
+                }
+            }
+            Redo => {
+                if undo_redo_history.actions.len() > 0
+                    && undo_redo_history.offset < undo_redo_history.actions.len()
+                {
+                    undo_redo_history.redo_action(&mut transform_q);
+                }
+            }
+        }
     }
 }
 

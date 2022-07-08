@@ -253,11 +253,11 @@ pub fn layer_zindex_stepthru_system(
     mut layer_state: ResMut<LayersUIState>,
     keyboard: Res<Input<KeyCode>>,
 ) {
-    if keyboard.just_pressed(KeyCode::LShift) {
+    if keyboard.just_pressed(KeyCode::Key1) {
         if let Some(elem) = layer_state.layers.iter_mut().rev().find(|(vis, _, _)| *vis) {
             elem.0 = false;
         }
-    } else if keyboard.just_pressed(KeyCode::LControl) {
+    } else if keyboard.just_pressed(KeyCode::Key2) {
         if let Some(elem) = layer_state.layers.iter_mut().find(|(vis, _, _)| !vis) {
             elem.0 = true;
         }
