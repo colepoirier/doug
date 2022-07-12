@@ -778,19 +778,19 @@ pub fn click_and_drag_shape_system(
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct UndoRedoHistory {
     pub offset: usize,
     pub actions: Vec<AtomicAction>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AtomicAction {
     pub action: TranslateAction,
     pub entities: Vec<Entity>,
 }
 
-#[derive(Deref, DerefMut, Debug, Default)]
+#[derive(Deref, DerefMut, Debug, Default, Clone, Copy)]
 pub struct TranslateAction(pub Vec2);
 
 pub fn undo_redo_tracking_system(
@@ -816,11 +816,18 @@ pub fn undo_redo_tracking_system(
                     let pos = initial_shape_pos.1;
                     let new_t = transform_q.get(entity).unwrap();
                     let dt = new_t.translation.truncate() - pos;
+
+                    if history.offset < history.actions.len() {
+                        let offset = history.offset;
+                        history.actions.truncate(offset);
+                    }
+
                     history.actions.push(AtomicAction {
                         action: TranslateAction(dt),
                         entities: (*dragging_entities).clone(),
                     });
                     history.offset += 1;
+
                     *dragging_entities = vec![];
                 }
             }
