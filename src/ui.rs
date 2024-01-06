@@ -4,11 +4,10 @@ use crate::{
         ImportLibCompleteEvent, Layer, Layers, LoadCellEvent, Net, OpenVlsirLibEvent, VlsirCell,
         VlsirLib,
     },
-    shapes::{Path, Poly, Rect},
-    CursorWorldPos, InLayer,
+    shapes::{InLayer, Path, Poly, Rect},
 };
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext, EguiPlugin};
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use geo::prelude::BoundingRect;
 use layout21::raw::BoundBoxTrait;
 use rfd::FileDialog;
@@ -16,40 +15,45 @@ use rfd::FileDialog;
 pub struct UIPlugin;
 
 /// Token to ensure a system runs on the main thread.
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct NonSendMarker;
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Resource, Debug, Default, Copy, Clone)]
 pub struct LibInfoUIDropdownState {
     pub selected: usize,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Resource, Debug, Default, Clone)]
 pub struct LayersUIState {
     pub layers: Vec<(bool, u8, String)>,
 }
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Resource, Debug, Default, Copy, Clone)]
 pub struct LibInfoUILoadingState {
     pub loading: bool,
 }
 
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(EguiPlugin)
+        app.add_plugins(EguiPlugin)
             .insert_resource(LibInfoUIDropdownState::default())
             .insert_resource(LibInfoUILoadingState::default())
             .insert_resource(LayersUIState::default())
-            .init_resource::<NonSendMarker>()
-            .add_system(file_menu_system)
-            // .add_system(debug_cursor_ui_or_world_system)
-            .add_system(lib_info_cell_picker_system)
-            .add_system(load_dropdown_selected_cell_system)
-            .add_system(layer_visibility_widget_system)
-            .add_system(set_layer_visibility_system)
-            .add_system(layer_zindex_stepthru_system)
-            .add_system(display_cursor_pos_system)
-            .add_system(display_current_selection_info);
+            .init_non_send_resource::<NonSendMarker>()
+            .add_systems(
+                Update,
+                (
+                    file_menu_system,
+                    // debug_cursor_ui_or_world_system,
+                    lib_info_cell_picker_system,
+                    load_dropdown_selected_cell_system,
+                    layer_visibility_widget_system,
+                    set_layer_visibility_system,
+                    layer_zindex_stepthru_system,
+                    display_cursor_pos_system,
+                    display_current_selection_info,
+                ),
+            );
     }
 }
 
@@ -59,7 +63,7 @@ pub fn file_menu_system(
     // sometimes the file dialog will not open and the app will go into
     // 'Not Responding'/spinning beachball state
     _marker: NonSend<NonSendMarker>,
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     mut open_vlsir_lib_event_writer: EventWriter<OpenVlsirLibEvent>,
 ) {
     egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
@@ -88,7 +92,7 @@ pub fn file_menu_system(
 }
 
 pub fn lib_info_cell_picker_system(
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     vlsir_lib: Res<VlsirLib>,
     vlsir_cell: Res<VlsirCell>,
     mut open_vlsir_lib_event_reader: EventReader<OpenVlsirLibEvent>,
@@ -98,11 +102,11 @@ pub fn lib_info_cell_picker_system(
 ) {
     let mut temp = dropdown_state.selected;
 
-    for _ in open_vlsir_lib_event_reader.iter() {
+    for _ in open_vlsir_lib_event_reader.read() {
         loading_state.loading = true;
     }
 
-    for _ in import_lib_complete_event_reader.iter() {
+    for _ in import_lib_complete_event_reader.read() {
         loading_state.loading = false;
     }
 
@@ -185,7 +189,7 @@ pub fn load_dropdown_selected_cell_system(
 }
 
 pub fn layer_visibility_widget_system(
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     layers: Res<Layers>,
     mut state: ResMut<LayersUIState>,
 ) {
@@ -238,7 +242,11 @@ pub fn set_layer_visibility_system(
         if curr_vis != prev_vis {
             for (in_layer, mut vis) in shape_q.iter_mut() {
                 if **in_layer == *layer {
-                    vis.is_visible = *curr_vis;
+                    if *curr_vis {
+                        *vis = Visibility::Visible;
+                    } else {
+                        *vis = Visibility::Hidden;
+                    }
                 }
             }
         }
@@ -264,23 +272,17 @@ pub fn layer_zindex_stepthru_system(
     }
 }
 
-pub fn display_cursor_pos_system(
-    mut egui_ctx: ResMut<EguiContext>,
-    cursor_world_pos: Res<CursorWorldPos>,
-) {
+pub fn display_cursor_pos_system(mut egui_ctx: EguiContexts) {
     egui::Window::new("Cursor World Position")
         .resizable(false)
         .default_pos([5.0, 142.0])
         .show(egui_ctx.ctx_mut(), |ui| {
-            ui.label(format!(
-                "x: {} nm, y: {} nm",
-                cursor_world_pos.x as i32, cursor_world_pos.y as i32
-            ))
+            ui.label(format!("x: {} nm, y: {} nm", 0, 0))
         });
 }
 
 pub fn display_current_selection_info(
-    mut egui_ctx: ResMut<EguiContext>,
+    mut egui_ctx: EguiContexts,
     selected_q: Query<(Entity, &InLayer, &Net), With<Selected>>,
     rect_q: Query<&Rect>,
     poly_q: Query<&Poly>,
@@ -365,7 +367,7 @@ pub fn display_current_selection_info(
 }
 
 // figure out if cursor is hovering over UI or over bevy 'app world'
-pub fn debug_cursor_ui_or_world_system(mut egui_ctx: ResMut<EguiContext>) {
+pub fn debug_cursor_ui_or_world_system(mut egui_ctx: EguiContexts) {
     info!(
         "is_pointer_over_area: {}, want_pointer_input: {}, is_using_pointer: {}",
         // simply detects if the cursor is over/in an egui element.
