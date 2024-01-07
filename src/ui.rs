@@ -6,17 +6,17 @@ use crate::{
     },
     shapes::{InLayer, Path, Poly, Rect},
 };
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    tasks::{IoTaskPool, Task},
+};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use futures_lite::future::{self, poll_once};
 use geo::prelude::BoundingRect;
 use layout21::raw::BoundBoxTrait;
-use rfd::FileDialog;
+use rfd::AsyncFileDialog;
 
 pub struct UIPlugin;
-
-/// Token to ensure a system runs on the main thread.
-#[derive(Resource, Default)]
-pub struct NonSendMarker;
 
 #[derive(Resource, Debug, Default, Copy, Clone)]
 pub struct LibInfoUIDropdownState {
@@ -39,7 +39,6 @@ impl Plugin for UIPlugin {
             .insert_resource(LibInfoUIDropdownState::default())
             .insert_resource(LibInfoUILoadingState::default())
             .insert_resource(LayersUIState::default())
-            .init_non_send_resource::<NonSendMarker>()
             .add_systems(
                 Update,
                 (
@@ -52,20 +51,16 @@ impl Plugin for UIPlugin {
                     layer_zindex_stepthru_system,
                     display_cursor_pos_system,
                     display_current_selection_info,
+                    handle_file_pick_result_task_system,
                 ),
             );
     }
 }
 
-pub fn file_menu_system(
-    // need this to make the system run on the main thread otherwise MacOS
-    // will have a race condition with the file dialog open request where
-    // sometimes the file dialog will not open and the app will go into
-    // 'Not Responding'/spinning beachball state
-    _marker: NonSend<NonSendMarker>,
-    mut egui_ctx: EguiContexts,
-    mut open_vlsir_lib_event_writer: EventWriter<OpenVlsirLibEvent>,
-) {
+#[derive(Debug, Component, Deref, DerefMut)]
+pub struct FilePickResultTask(Task<Option<rfd::FileHandle>>);
+
+pub fn file_menu_system(mut commands: Commands, mut egui_ctx: EguiContexts) {
     egui::TopBottomPanel::top("top_panel").show(egui_ctx.ctx_mut(), |ui| {
         // The top panel is often a good place for a menu bar:
         egui::menu::bar(ui, |ui| {
@@ -73,15 +68,14 @@ pub fn file_menu_system(
                 ui.spacing_mut().button_padding = (8.0, 8.0).into();
                 if ui.button(egui::RichText::new("Load").size(16.0)).clicked() {
                     ui.close_menu();
-                    let path = FileDialog::new()
-                        .add_filter("protos", &["proto"])
-                        .pick_file();
-                    // handle file picking cancellation by only sending event if a file was selected
-                    if let Some(path) = path {
-                        open_vlsir_lib_event_writer.send(OpenVlsirLibEvent {
-                            path: path.to_str().unwrap().to_owned(),
-                        });
-                    }
+                    let task = IoTaskPool::get().spawn(async move {
+                        AsyncFileDialog::new()
+                            .add_filter("protos", &["proto"])
+                            .pick_file()
+                            .await
+                    });
+
+                    commands.spawn(FilePickResultTask(task));
                 }
                 if ui.button(egui::RichText::new("Quit").size(16.0)).clicked() {
                     std::process::exit(0);
@@ -89,6 +83,24 @@ pub fn file_menu_system(
             });
         });
     });
+}
+
+fn handle_file_pick_result_task_system(
+    mut commands: Commands,
+    mut file_pick_result_task_q: Query<(Entity, &mut FilePickResultTask)>,
+    mut open_vlsir_lib_event_writer: EventWriter<OpenVlsirLibEvent>,
+) {
+    for (entity, mut task) in file_pick_result_task_q.iter_mut() {
+        if let Some(file_handle) = future::block_on(poll_once(&mut **task)) {
+            // handle file picking cancellation by only sending event if a file was selected
+            if let Some(file_handle) = file_handle {
+                open_vlsir_lib_event_writer.send(OpenVlsirLibEvent {
+                    path: file_handle.path().to_path_buf(),
+                });
+            }
+            commands.entity(entity).despawn();
+        }
+    }
 }
 
 pub fn lib_info_cell_picker_system(
@@ -125,6 +137,8 @@ pub fn lib_info_cell_picker_system(
                         vlsir_lib
                             .path
                             .as_ref()
+                            .unwrap()
+                            .to_str()
                             .unwrap()
                             .split("/")
                             .last()

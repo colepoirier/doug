@@ -6,6 +6,7 @@ use crate::ui::{LayersUIState, LibInfoUIDropdownState};
 use crate::{ALPHA, WIDTH};
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use bevy::prelude::*;
 
@@ -63,7 +64,7 @@ pub fn get_shapes(cell: &Cell) -> Iter<Element> {
 
 #[derive(Resource, Debug, Default)]
 pub struct VlsirLib {
-    pub path: Option<String>,
+    pub path: Option<PathBuf>,
     pub lib: Option<Library>,
     pub cell_names: Option<Vec<String>>,
 }
@@ -158,7 +159,7 @@ pub struct Net(pub Option<String>);
 
 #[derive(Event, Debug, Default, Clone)]
 pub struct OpenVlsirLibEvent {
-    pub path: String,
+    pub path: PathBuf,
 }
 
 #[derive(Event, Debug, Default, Clone, Copy)]
@@ -248,7 +249,7 @@ pub fn handle_vlsir_open_task_system(
 pub fn vlsir_open_task_duration_system(
     time: Res<Time>,
     mut duration: Local<f64>,
-    mut path: Local<Option<String>>,
+    mut path: Local<Option<PathBuf>>,
     mut open_vlsir_lib_event_reader: EventReader<OpenVlsirLibEvent>,
     mut open_vlsir_lib_complete_event_reader: EventReader<OpenVlsirLibCompleteEvent>,
 ) {
